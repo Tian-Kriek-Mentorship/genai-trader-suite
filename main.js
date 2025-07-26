@@ -1,8 +1,10 @@
 /* ---------- main.js ---------- */
 // main.js  — use jsDelivr ES‑modules (CORS‑ready)
 // main.js  — reliable ESM CDN
-import { createChart } from 'https://esm.sh/lightweight-charts@5.0.8?bundle';
-import axios from 'https://esm.sh/axios@1.6.8';
+// -------- main.js (top) --------
+import { createChart } from 'https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/+esm';
+import axios            from 'https://cdn.jsdelivr.net/npm/axios@1.6.8/+esm';
+
 
 
 
