@@ -1,6 +1,8 @@
 /* ---------- main.js ---------- */
-import { createChart } from 'lightweight-charts';
-import axios from 'axios';
+// main.js  – use CDN ES‑modules
+import { createChart } from 'https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.esm.js';
+import axios from 'https://unpkg.com/axios@1.6.8/dist/axios.esm.js';
+
 
 /* 1 · Render a BTC‑USDT line chart (last 150 daily closes) */
 const chart = createChart(document.getElementById('chart'), {
