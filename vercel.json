@@ -8,8 +8,8 @@
     }
   ],
   "routes": [
-    { "handle": "filesystem" },           // serve any real files/functions first
-    { "src": "/api/(.*)", "dest": "/api/$1" }, // keep serverless functions working
-    { "src": "/(.*)", "dest": "/dist/$1" }     // everything else → dist
+    { "handle": "filesystem" },
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/dist/$1" }
   ]
 }
