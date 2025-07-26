@@ -1,22 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>Liquidity‑Cycle Dashboard</title>
     <link rel="icon" href="/favicon.png" />
+    <style>
+      body{font-family:system-ui,sans-serif;margin:2rem}
+      #chart{max-width:800px;height:400px;margin-top:1rem}
+      pre{white-space:pre-wrap;background:#f6f6f6;padding:0.5rem}
+    </style>
   </head>
+
   <body>
-    <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
+    <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
 
     <button id="aiBtn">AI Summary</button>
     <pre id="out"></pre>
+    <canvas id="chart"></canvas>
 
-    <canvas id="chart" style="max-width:800px;height:400px;"></canvas>
-
-    <!-- 1 ▸ put the full Lightweight‑Charts bundle on window.LightweightCharts -->
+    <!-- 1 ▸ load full Lightweight‑Charts (puts `window.LightweightCharts`) -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 
-    <!-- 2 ▸ your dashboard code -->
+    <!-- 2 ▸ your dashboard logic -->
     <script type="module" src="/main.js"></script>
   </body>
 </html>
