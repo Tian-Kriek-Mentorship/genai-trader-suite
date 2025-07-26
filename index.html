@@ -3,28 +3,25 @@
   <head>
     <meta charset="utf-8" />
     <title>Liquidity‑Cycle Dashboard</title>
-
-    <!-- Optional: favicon — place favicon.png in repo root -->
     <link rel="icon" href="/favicon.png" />
     <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; }
-      h1  { margin-bottom: 1rem; }
-      #chart { max-width: 800px; height: 400px; margin-top: 1rem; }
-      button { padding: 0.5rem 1rem; margin-top: 0.5rem; }
-      pre { white-space: pre-wrap; background:#f6f6f6; padding:0.5rem; }
+      body{font-family:system-ui,sans-serif;margin:2rem}
+      #chart{max-width:800px;height:400px;margin-top:1rem}
+      pre{white-space:pre-wrap;background:#f6f6f6;padding:0.5rem}
     </style>
   </head>
 
   <body>
     <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
+
     <button id="aiBtn">AI Summary</button>
     <pre id="out"></pre>
     <canvas id="chart"></canvas>
 
-    <!-- 1 · Lightweight‑Charts standalone bundle (no CORS issues) -->
+    <!-- 1 ▸ load full Lightweight‑Charts (puts `window.LightweightCharts`) -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 
-    <!-- 2 · Your dashboard code -->
+    <!-- 2 ▸ your dashboard logic -->
     <script type="module" src="/main.js"></script>
   </body>
 </html>
