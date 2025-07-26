@@ -1,5 +1,35 @@
-// main.js  — minimal placeholder
-document.getElementById('aiBtn').onclick = () => {
-  document.getElementById('out').textContent =
-    'AI summary will appear here once /api/ai is live.';
+/* ---------- main.js ---------- */
+import { createChart } from 'lightweight-charts';
+import axios from 'axios';
+
+/* 1 · Render a BTC‑USDT line chart (last 150 daily closes) */
+const chart = createChart(document.getElementById('chart'), {
+  width: 800,
+  height: 400,
+});
+const series = chart.addLineSeries({ color: '#2962FF' });
+
+(async function loadData() {
+  const url =
+    'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=150';
+  const { data } = await axios.get(url);
+  series.setData(
+    data.map(candle => ({
+      time: candle[0] / 1000,       // Binance gives ms; convert to seconds
+      value: parseFloat(candle[4]), // Close price
+    })),
+  );
+})();
+
+/* 2 · AI Summary button */
+document.getElementById('aiBtn').onclick = async () => {
+  const out = document.getElementById('out');
+  out.textContent = 'Loading AI summary…';
+
+  try {
+    const res = await axios.get('/api/ai');
+    out.textContent = res.data.text.trim();
+  } catch (err) {
+    out.textContent = 'Error: ' + (err.response?.data?.error || err.message);
+  }
 };
