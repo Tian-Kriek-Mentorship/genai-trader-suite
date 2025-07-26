@@ -6,9 +6,6 @@ import { createChart } from 'https://cdn.jsdelivr.net/npm/lightweight-charts@5.0
 import axios            from 'https://cdn.jsdelivr.net/npm/axios@1.6.8/+esm';
 
 
-
-
-
 /* 1 · Render a BTC‑USDT line chart (last 150 daily closes) */
 const chart = createChart(document.getElementById('chart'), {
   width: 800,
