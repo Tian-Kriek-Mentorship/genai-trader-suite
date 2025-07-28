@@ -67,13 +67,94 @@ symbolSelect.addEventListener('change', updateDashboard);
 // on load
 window.addEventListener('load', loadSymbols);
 
-// 7) fetchAndDraw (includes 1d EMA injection)
-async function fetchAndDraw(sym,type,intv,containerId) {
-  /* same as before */
+// —————————————————————————————————————————————————————————————————————
+// 7) Fibonacci + auto‑zoom (stores fibTarget in chart state)
+// —————————————————————————————————————————————————————————————————————
+function drawFibsOnChart(containerId) {
+  const e = charts[containerId];
+  if (!e) return;
+  const { chart, series, data } = e;
+  const opens = data.map(d=>d.open), highs = data.map(d=>d.high), lows = data.map(d=>d.low);
+  const ma50  = sma(opens,50), ma200 = sma(opens,200);
+  let lastGC=-1, lastDC=-1;
+  for (let i=1; i<opens.length; i++){
+    if (ma50[i]>ma200[i] && ma50[i-1]<=ma200[i-1]) lastGC=i;
+    if (ma50[i]<ma200[i] && ma50[i-1]>=ma200[i-1]) lastDC=i;
+  }
+  const isUp = lastGC>lastDC, idx = isUp?lastGC:lastDC;
+  if (idx<0) return;
+
+  let pre = idx, start = ((isUp?lastDC:lastGC)>0 ? (isUp?lastDC:lastGC):0);
+  for (let i=start; i<idx; i++){
+    if (isUp? lows[i]<lows[pre] : highs[i]>highs[pre]) pre=i;
+  }
+  let post=-1;
+  for (let i=idx+2; i<data.length-2; i++){
+    const fh = highs[i]>highs[i-1]&&highs[i]>highs[i-2]&&highs[i]>highs[i+1]&&highs[i]>highs[i+2];
+    const fl = lows[i]<lows[i-1] && lows[i]<lows[i-2] && lows[i]<lows[i+1] && lows[i]<lows[i+2];
+    if (isUp && fh) { post=i; break; }
+    if (!isUp && fl) { post=i; break; }
+  }
+  if (post<0) return;
+
+  const preP  = isUp? lows[pre] : highs[pre],
+        postP = isUp? highs[post]: lows[post],
+        r     = Math.abs(postP-preP);
+  const retrace = isUp? postP-r*0.618: postP+r*0.618,
+        ext127  = isUp? postP+r*0.27 : postP-r*0.27,
+        ext618  = isUp? postP+r*0.618: postP-r*0.618,
+        ext2618 = isUp? postP+r*1.618: postP-r*1.618;
+  let touched=false, moved127=false;
+  for (let i=post+1; i<data.length; i++){
+    if (isUp){ if(lows[i]<=retrace) touched=true; if(highs[i]>=ext127) moved127=true; }
+    else    { if(highs[i]>=retrace) touched=true; if(lows[i]<=ext127) moved127=true; }
+  }
+  const level = touched?ext618:(!touched&&!moved127?ext127:ext2618);
+  series.createPriceLine({ price:level, color:'darkgreen', lineWidth:2, axisLabelVisible:true });
+
+  // stash the target for the scanner
+  charts[containerId].fibTarget = level;
+
+  // force-zoom
+  if (!e.zoomSeries) {
+    const zs = chart.addLineSeries({ color:'rgba(0,0,0,0)', lineWidth:0 });
+    e.zoomSeries = zs;
+  }
+  e.zoomSeries.setData([
+    { time:data[0].time,            value:level },
+    { time:data[data.length-1].time, value:level }
+  ]);
 }
 
-// 8) drawFibsOnChart, drawEMAandProbability, drawRSIandSignal
-/* reuse your existing code exactly here – unchanged */
+// —————————————————————————————————————————————————————————————————————
+// 8) EMA & probability overlay
+// —————————————————————————————————————————————————————————————————————
+function drawEMAandProbability(containerId) {
+  const e = charts[containerId];
+  if (!e || !e.emaArr) return false;
+  const lastClose = e.data[e.data.length-1].close;
+  const lastEma   = e.emaArr[e.emaArr.length-1];
+  const bull      = lastClose > lastEma;
+  const id        = `${containerId}-prob`;
+  let div = document.getElementById(id);
+  if (!div) {
+    div = document.createElement('div');
+    div.id = id;
+    div.style.position      = 'absolute';
+    div.style.top           = '8px';
+    div.style.left          = '8px';
+    div.style.zIndex        = '20';
+    div.style.fontSize      = '16px';
+    div.style.fontWeight    = 'bold';
+    div.style.whiteSpace    = 'pre';
+    div.style.pointerEvents = 'none';
+    document.getElementById(containerId).appendChild(div);
+  }
+  div.style.color    = bull ? 'green' : 'red';
+  div.textContent    = `${bull?'▲':'▼'}\nProbability - ${bull?'Bullish':'Bearish'}`;
+  return bull;
+}
+
 
 // 9) Scanner: top‑20 default + live filter
 async function runScanner() {
