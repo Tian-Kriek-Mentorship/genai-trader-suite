@@ -1,19 +1,19 @@
 // main.js
 
-// 1. Top‑10 USDT trading pairs
+// ─── 1) Top‑10 USDT trading pairs ───────────────────────────────────
 const symbols = [
-  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT',
-  'SOLUSDT', 'DOGEUSDT', 'DOTUSDT', 'MATICUSDT', 'AVAXUSDT'
+  'BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT',
+  'SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'
 ];
 
-// 2. Grab DOM refs
+// ─── 2) DOM refs ────────────────────────────────────────────────────
 const symbolSelect = document.getElementById('symbolSelect');
 const dailyTitle   = document.getElementById('dailyTitle');
 const hourlyTitle  = document.getElementById('hourlyTitle');
 const aiBtn        = document.getElementById('aiBtn');
 const outPre       = document.getElementById('out');
 
-// 3. Populate the dropdown
+// ─── 3) Populate dropdown ──────────────────────────────────────────
 symbols.forEach(sym => {
   const opt = document.createElement('option');
   opt.value = sym;
@@ -21,11 +21,26 @@ symbols.forEach(sym => {
   symbolSelect.appendChild(opt);
 });
 
-// 4. Your existing AI‑summary click handler should stay in place;
-//    we assume you already have something like:
-aiBtn.addEventListener('click', /* yourSummaryFunction */);
+// ─── 4) Your AI‐summary function ────────────────────────────────────
+// Replace the body of this with your actual AI‐call (e.g. axios→OpenAI).
+async function generateAISummary() {
+  const sym = symbolSelect.value;
+  outPre.textContent = 'Loading AI summary for ' + sym + ' …';
 
-// 5. Unified update function
+  try {
+    // EXAMPLE placeholder: swap this out for your real endpoint & payload
+    const resp = await axios.post('/api/ai-summary', { symbol: sym });
+    outPre.textContent = resp.data.summary;
+  } catch (err) {
+    console.error(err);
+    outPre.textContent = '❌ Failed to load summary.';
+  }
+}
+
+// ─── 5) Wire up the AI button correctly ───────────────────────────
+aiBtn.addEventListener('click', generateAISummary);
+
+// ─── 6) Unified update function ────────────────────────────────────
 async function updateDashboard() {
   const sym = symbolSelect.value;
 
@@ -33,29 +48,24 @@ async function updateDashboard() {
   dailyTitle.textContent  = `${sym} — Daily`;
   hourlyTitle.textContent = `${sym} — 1 Hour`;
 
-  // draw both charts
+  // redraw charts
   await fetchAndDraw(sym, 'daily',  '1d', 'dailyChart');
   await fetchAndDraw(sym, 'hourly', '1h', 'hourlyChart');
 
-  // then run your AI summary logic directly
-  // if yourSummaryFunction reads from #out, just call it here:
-  aiBtn.click(); 
+  // then auto‐run the summary
+  await generateAISummary();
 }
 
-// 6. Wire it up
+// ─── 7) Hook symbol‐change & initial load ──────────────────────────
 symbolSelect.addEventListener('change', updateDashboard);
+updateDashboard();  // on page load
 
-// 7. Kickoff on load
-updateDashboard();
-
-
-// ─── helper: fetch + draw ─────────────────────────────────────────
-
+// ─── helper: fetch + draw ──────────────────────────────────────────
 async function fetchAndDraw(symbol, type, interval, containerId) {
   const end   = Date.now();
   const start = end - (type === 'daily'
-    ? 365 * 24 * 3600 * 1000  // last year
-    :   7 * 24 * 3600 * 1000); // last week
+    ? 365 * 24 * 3600 * 1000
+    :   7 * 24 * 3600 * 1000);
   const limit = type === 'daily' ? 365 : 168;
 
   const resp = await axios.get('https://api.binance.com/api/v3/klines', {
