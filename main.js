@@ -1,46 +1,88 @@
-console.log('✅ MAIN.JS LOADED', Date.now());
+console.log("✅ main.js loaded");
 
-window.addEventListener('DOMContentLoaded', async () => {
-  async function fetchCandles(symbol, interval, limit) {
-    const res = await axios.get(`https://api.binance.com/api/v3/klines`, {
-      params: { symbol, interval, limit }
-    });
-    return res.data.map(c => ({
-      time: c[0] / 1000,
-      open: +c[1],
-      high: +c[2],
-      low: +c[3],
-      close: +c[4]
-    }));
+// ------------------ Global Setup ------------------
+import {
+  createChart
+} from 'https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js';
+
+const dailyChart = createChart(document.getElementById("dailyChart"), {
+  width: 800,
+  height: 400,
+});
+const h1Chart = createChart(document.getElementById("hourlyChart"), {
+  width: 800,
+  height: 400,
+});
+
+const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
+const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
+
+// ------------------ Fetch Binance Candle Data ------------------
+async function fetchBinanceData(symbol = "BTCUSDT", interval = "1d", limit = 500) {
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const res = await fetch(url);
+  const raw = await res.json();
+  return raw.map(candle => ({
+    time: candle[0] / 1000,
+    open: parseFloat(candle[1]),
+    high: parseFloat(candle[2]),
+    low: parseFloat(candle[3]),
+    close: parseFloat(candle[4]),
+  }));
+}
+
+// ------------------ Fibonacci Logic ------------------
+function plotFibonacci(chart, candles) {
+  const len = candles.length;
+  if (len < 10) return;
+
+  // Find recent swing low and swing high
+  let swingLow = candles[0];
+  let swingHigh = candles[0];
+
+  for (let i = len - 50; i < len; i++) {
+    if (candles[i].low < swingLow.low) swingLow = candles[i];
+    if (candles[i].high > swingHigh.high) swingHigh = candles[i];
   }
 
-  function drawChart(containerId, candles) {
-    const chartContainer = document.getElementById(containerId);
-    chartContainer.style.height = '400px';
-    chartContainer.style.width = '800px';
+  const isUpTrend = swingHigh.time > swingLow.time;
 
-    const chart = LightweightCharts.createChart(chartContainer, {
-      width: 800,
-      height: 400
-    });
+  const fibLines = chart.addLineSeries({
+    color: isUpTrend ? "green" : "red",
+    lineWidth: 1,
+    lineStyle: 1,
+  });
 
-    const candleSeries = chart.addCandlestickSeries();
-    candleSeries.setData(candles);
-  }
+  const fibStart = isUpTrend ? swingLow : swingHigh;
+  const fibEnd = isUpTrend ? swingHigh : swingLow;
+  const range = Math.abs(fibEnd.close - fibStart.close);
 
-  const dailyCandles = await fetchCandles('BTCUSDT', '1d', 300);
-  const hourlyCandles = await fetchCandles('BTCUSDT', '1h', 300);
+  const levels = isUpTrend
+    ? [1.618, 2.618].map(mult => fibEnd.close + range * (mult - 1))
+    : [1.618, 2.618].map(mult => fibEnd.close - range * (mult - 1));
 
-  drawChart('dailyChart', dailyCandles);
-  drawChart('hourlyChart', hourlyCandles);
+  levels.forEach((price, i) => {
+    fibLines.setData([
+      { time: fibStart.time, value: price },
+      { time: candles[len - 1].time, value: price },
+    ]);
+  });
+}
 
-  document.getElementById('aiBtn').onclick = async () => {
-    const o = document.getElementById('out');
-    o.textContent = 'Loading…';
-    try {
-      o.textContent = (await axios.get('/api/ai')).data.text.trim();
-    } catch (e) {
-      o.textContent = 'Error: ' + (e.response?.data?.error || e.message);
-    }
-  };
+// ------------------ Load and Plot ------------------
+(async () => {
+  const dailyData = await fetchBinanceData("BTCUSDT", "1d");
+  dailySeries.setData(dailyData);
+  plotFibonacci(dailyChart, dailyData);
+
+  const h1Data = await fetchBinanceData("BTCUSDT", "1h");
+  h1Series.setData(h1Data);
+  plotFibonacci(h1Chart, h1Data);
+})();
+
+// ------------------ AI Summary Button ------------------
+document.getElementById("aiBtn").addEventListener("click", async () => {
+  const res = await fetch("https://api.llama.fi/summary?symbol=BTC");
+  const data = await res.json();
+  document.getElementById("out").textContent = data?.summary || "No summary found.";
 });
