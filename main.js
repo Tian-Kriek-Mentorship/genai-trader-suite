@@ -1,4 +1,3 @@
-
 console.log('✅ MAIN.JS LOADED', Date.now());
 
 async function fetchCandles(symbol, interval, limit) {
@@ -108,7 +107,7 @@ function ema(src, len) {
   return result;
 }
 
-function drawChart(containerId, candles, showIndicators = false) {
+function drawChart(containerId, candles) {
   const chart = LightweightCharts.createChart(document.getElementById(containerId), {
     width: 800,
     height: 400
@@ -134,48 +133,39 @@ function drawChart(containerId, candles, showIndicators = false) {
       shapeId: `${f.time}-${f.price}`,
     });
   }
-
-  if (showIndicators) {
-    const momentumDiv = document.createElement('div');
-    momentumDiv.style.width = '800px';
-    momentumDiv.style.height = '100px';
-    document.getElementById(containerId).after(momentumDiv);
-
-    const momentumChart = LightweightCharts.createChart(momentumDiv, { height: 100 });
-    const momentumSeries = momentumChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
-    momentumSeries.setData(calculateMomentum(candles));
-
-    const rsiDiv = document.createElement('div');
-    rsiDiv.style.width = '800px';
-    rsiDiv.style.height = '100px';
-    momentumDiv.after(rsiDiv);
-
-    const rsiChart = LightweightCharts.createChart(rsiDiv, { height: 100 });
-    const rsiSeries = rsiChart.addLineSeries({ color: '#7E57C2', lineWidth: 2 });
-    const rsiData = calculateRSI(candles.map(c => c.close));
-    rsiSeries.setData(rsiData.map((v, i) => ({ time: candles[i]?.time, value: v })));
-
-    const rsiUpper = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
-    const rsiLower = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
-    rsiUpper.setData(candles.map(c => ({ time: c.time, value: 70 })));
-    rsiLower.setData(candles.map(c => ({ time: c.time, value: 30 })));
-  }
 }
 
 (async () => {
   const dailyCandles = await fetchCandles('BTCUSDT', '1d', 300);
   const hourlyCandles = await fetchCandles('BTCUSDT', '1h', 300);
 
-  drawChart('dailyChart', dailyCandles, true);
+  // Price charts
+  drawChart('dailyChart', dailyCandles);
   drawChart('hourlyChart', hourlyCandles);
+
+  // Momentum
+  const momentumChart = LightweightCharts.createChart(document.getElementById('momentumChart'), {
+    width: 800, height: 100
+  });
+  const momentumSeries = momentumChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
+  momentumSeries.setData(calculateMomentum(dailyCandles));
+
+  // RSI
+  const rsiChart = LightweightCharts.createChart(document.getElementById('rsiChart'), {
+    width: 800, height: 100
+  });
+  const rsiSeries = rsiChart.addLineSeries({ color: '#7E57C2', lineWidth: 2 });
+  const rsiData = calculateRSI(dailyCandles.map(c => c.close));
+  rsiSeries.setData(rsiData.map((v, i) => ({ time: dailyCandles[i]?.time, value: v })));
+
+  const rsiUpper = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
+  const rsiLower = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
+  rsiUpper.setData(dailyCandles.map(c => ({ time: c.time, value: 70 })));
+  rsiLower.setData(dailyCandles.map(c => ({ time: c.time, value: 30 })));
 })();
 
 document.getElementById('aiBtn').onclick = async () => {
   const o = document.getElementById('out');
   o.textContent = 'Loading…';
   try {
-    o.textContent = (await axios.get('/api/ai')).data.text.trim();
-  } catch (e) {
-    o.textContent = 'Error: ' + (e.response?.data?.error || e.message);
-  }
-};
+    o.textContent = (await axios.get('/a
