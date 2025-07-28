@@ -19,19 +19,28 @@ async function fetchCoinGeckoCandles(symbolId, days = 30) {
   const data = await res.json();
 
   if (!Array.isArray(data.candles)) {
-    console.error("Unexpected response:", data);
-    throw new Error("Unexpected data structure from proxy");
+    console.error("⛔ Unexpected response format:", data);
+    throw new Error("Unexpected data structure from /api/crypto");
   }
 
-  // Convert [timestamp, open, high, low, close] to proper object
-  return data.candles.map(([time, open, high, low, close]) => ({
-    time: Math.floor(time / 1000),
-    open,
-    high,
-    low,
-    close,
-  }));
+  // Now we’re sure it's an array of arrays
+  return data.candles.map(candle => {
+    if (!Array.isArray(candle) || candle.length < 5) {
+      console.warn("⚠️ Skipping malformed candle:", candle);
+      return null;
+    }
+
+    const [time, open, high, low, close] = candle;
+    return {
+      time: Math.floor(time / 1000),
+      open,
+      high,
+      low,
+      close
+    };
+  }).filter(Boolean);
 }
+
 
 // ------------------ Fibonacci Plot ------------------
 function plotFibonacci(chart, candles) {
