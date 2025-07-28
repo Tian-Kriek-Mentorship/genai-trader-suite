@@ -1,6 +1,6 @@
 console.log("✅ main.js loaded");
 
-// ------------------ Chart Setup ------------------
+// Use global script from v4 CDN (no import/export)
 const dailyChart = LightweightCharts.createChart(document.getElementById("dailyChart"), {
   width: 800,
   height: 400,
@@ -13,85 +13,66 @@ const h1Chart = LightweightCharts.createChart(document.getElementById("hourlyCha
 const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
 const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
-// ------------------ Fetch from Your API ------------------
 async function fetchCandles(symbol, interval) {
   const res = await fetch(`/api/quotes?symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
   if (!res.ok) throw new Error("Failed to fetch candle data");
   const data = await res.json();
 
-  return data.values
-    .map(candle => ({
-      time: Math.floor(new Date(candle.datetime).getTime() / 1000),
-      open: parseFloat(candle.open),
-      high: parseFloat(candle.high),
-      low: parseFloat(candle.low),
-      close: parseFloat(candle.close),
-    }))
-    .reverse(); // Newest to oldest
+  return data.values.map(c => ({
+    time: Math.floor(new Date(c.datetime).getTime() / 1000),
+    open: parseFloat(c.open),
+    high: parseFloat(c.high),
+    low: parseFloat(c.low),
+    close: parseFloat(c.close),
+  })).reverse();
 }
 
-// ------------------ Fibonacci Logic ------------------
 function plotFibonacci(chart, candles) {
-  const len = candles.length;
-  if (len < 50) return;
+  if (candles.length < 50) return;
 
-  let swingLow = candles[len - 50];
-  let swingHigh = candles[len - 50];
-
-  for (let i = len - 50; i < len; i++) {
+  let swingLow = candles.at(-50);
+  let swingHigh = candles.at(-50);
+  for (let i = candles.length - 50; i < candles.length; i++) {
     if (candles[i].low < swingLow.low) swingLow = candles[i];
     if (candles[i].high > swingHigh.high) swingHigh = candles[i];
   }
 
   const isUptrend = swingHigh.time > swingLow.time;
-  const fibStart = isUptrend ? swingLow : swingHigh;
-  const fibEnd = isUptrend ? swingHigh : swingLow;
-  const range = Math.abs(fibEnd.close - fibStart.close);
+  const start = isUptrend ? swingLow : swingHigh;
+  const end = isUptrend ? swingHigh : swingLow;
+  const range = Math.abs(end.close - start.close);
 
-  const levels = isUptrend
-    ? [1.618, 2.618].map(mult => fibEnd.close + range * (mult - 1))
-    : [1.618, 2.618].map(mult => fibEnd.close - range * (mult - 1));
+  const levels = [1.618, 2.618].map(f => isUptrend
+    ? end.close + range * (f - 1)
+    : end.close - range * (f - 1));
 
-  levels.forEach((price) => {
-    const fibLine = chart.addLineSeries({
-      color: isUptrend ? "green" : "red",
-      lineWidth: 1,
-      lineStyle: 1,
-    });
-    fibLine.setData([
-      { time: fibStart.time, value: price },
-      { time: candles[len - 1].time, value: price },
+  levels.forEach(level => {
+    const line = chart.addLineSeries({ color: isUptrend ? "green" : "red", lineWidth: 1 });
+    line.setData([
+      { time: start.time, value: level },
+      { time: candles.at(-1).time, value: level },
     ]);
   });
 }
 
-// ------------------ Load Charts ------------------
 async function loadCharts(symbol = "BTC/USD") {
-  try {
-    const dailyData = await fetchCandles(symbol, "1day");
-    dailySeries.setData(dailyData);
-    plotFibonacci(dailyChart, dailyData);
+  const daily = await fetchCandles(symbol, "1day");
+  dailySeries.setData(daily);
+  plotFibonacci(dailyChart, daily);
 
-    const h1Data = await fetchCandles(symbol, "1h");
-    h1Series.setData(h1Data);
-    plotFibonacci(h1Chart, h1Data);
-  } catch (err) {
-    console.error("Chart load failed:", err);
-  }
+  const h1 = await fetchCandles(symbol, "1h");
+  h1Series.setData(h1);
+  plotFibonacci(h1Chart, h1);
 }
 
-// ------------------ AI Summary ------------------
+loadCharts();
+
 document.getElementById("aiBtn").addEventListener("click", async () => {
   const res = await fetch("/api/ai");
   const data = await res.json();
   document.getElementById("out").textContent = data.summary || "No summary found.";
 });
 
-// ------------------ Symbol Select ------------------
-document.getElementById("symbolSelect").addEventListener("change", (e) => {
-  const selected = e.target.value;
-  loadCharts(selected);
+document.getElementById("symbolSelect").addEventListener("change", e => {
+  loadCharts(e.target.value);
 });
-
-// Load default on page load
-loadCharts();
