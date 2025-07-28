@@ -75,9 +75,25 @@ function plotFibonacci(chart, candles) {
   plotFibonacci(h1Chart, h1Data);
 })();
 
-// --- AI Summary ---
+// ------------------ AI Summary Button ------------------
 document.getElementById("aiBtn").addEventListener("click", async () => {
-  const res = await fetch("https://api.llama.fi/summary?symbol=BTC");
-  const data = await res.json();
-  document.getElementById("out").textContent = data?.summary || "No summary found.";
+  try {
+    const res = await fetch("/api/ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        symbol: "BTCUSDT",     // Or make this dynamic if needed
+        timeframe: "1d"        // Could be "1d" or "1h", adjust as needed
+      })
+    });
+
+    if (!res.ok) throw new Error("API error");
+
+    const data = await res.json();
+    document.getElementById("out").textContent = data?.text || "No summary found.";
+  } catch (err) {
+    console.error("AI summary error:", err);
+    document.getElementById("out").textContent = "Error loading AI summary.";
+  }
 });
+
