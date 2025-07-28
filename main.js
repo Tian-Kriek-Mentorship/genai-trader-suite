@@ -1,9 +1,11 @@
 console.log('✅ MAIN.JS LOADED', Date.now());
 
-const chart = LightweightCharts.createChart(
+// ✅ Use window.LightweightCharts to avoid undefined error
+const chart = window.LightweightCharts.createChart(
   document.getElementById('chartContainer'),
   { width: 800, height: 400 }
 );
+
 const series = chart.addLineSeries({ color: '#2962FF' });
 
 (async () => {
