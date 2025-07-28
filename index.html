@@ -27,11 +27,9 @@
     <pre id="out"></pre>
     <div id="chartContainer"></div>
 
-    <!-- ✅ NEW: Include axios and lightweight-charts as global scripts -->
-    <!-- ✅ Axios and TradingView UMD CDN -->
-<script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
-<script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.development.js"></script>
-<script src="/main.js"></script>
-
+    <!-- ✅ Load scripts in correct order -->
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@5.0.0/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="/main.js"></script>
   </body>
 </html>
