@@ -1,0 +1,65 @@
+// /api/ig-price.js
+
+export default async function handler(req, res) {
+  const IG_API_KEY = process.env.IG_API_KEY;
+  const IG_USERNAME = process.env.IG_USERNAME;
+  const IG_PASSWORD = process.env.IG_PASSWORD;
+  const IG_ACCOUNT_TYPE = process.env.IG_ACCOUNT_TYPE || "LIVE";
+
+  const { epic = "CS.D.BITCOIN.CFD.IP", resolution = "DAY", max = 365 } = req.query;
+
+  const loginUrl = "https://api.ig.com/gateway/deal/session";
+  const pricesUrl = `https://api.ig.com/gateway/deal/prices/${epic}?resolution=${resolution}&max=${max}`;
+
+  try {
+    // 1. Authenticate and retrieve tokens
+    const loginRes = await fetch(loginUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-IG-API-KEY": IG_API_KEY,
+        "Version": "2"
+      },
+      body: JSON.stringify({
+        identifier: IG_USERNAME,
+        password: IG_PASSWORD,
+      }),
+    });
+
+    const loginData = await loginRes.json();
+    const cst = loginRes.headers.get("CST");
+    const xSecurityToken = loginRes.headers.get("X-SECURITY-TOKEN");
+
+    if (!cst || !xSecurityToken) {
+      return res.status(401).json({ error: "IG auth failed" });
+    }
+
+    // 2. Get historical prices
+    const pricesRes = await fetch(pricesUrl, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-IG-API-KEY": IG_API_KEY,
+        CST: cst,
+        "X-SECURITY-TOKEN": xSecurityToken,
+      },
+    });
+
+    const pricesData = await pricesRes.json();
+
+    const candles = pricesData.prices.map(c => ({
+      time: Math.floor(new Date(c.snapshotTimeUTC).getTime() / 1000),
+      open: c.openPrice.ask,
+      high: c.highPrice.ask,
+      low: c.lowPrice.ask,
+      close: c.closePrice.ask,
+    }));
+
+    return res.status(200).json({ candles });
+  } catch (err) {
+    console.error("IG API error", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
