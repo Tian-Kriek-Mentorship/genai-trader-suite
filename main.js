@@ -1,7 +1,6 @@
 console.log('✅ MAIN.JS LOADED', Date.now());
 
 window.addEventListener('DOMContentLoaded', async () => {
-
   async function fetchCandles(symbol, interval, limit) {
     const res = await axios.get(`https://api.binance.com/api/v3/klines`, {
       params: { symbol, interval, limit }
@@ -53,84 +52,84 @@ window.addEventListener('DOMContentLoaded', async () => {
     return fractals;
   }
 
-  function calculateRSI(closes, period = 14) {
-    const rsi = [];
-    let avgGain = 0;
-    let avgLoss = 0;
+  function calculateMomentum(data) {
+    const result = [];
+    const sensitivity = 150;
+    const fastLen = 20;
+    const slowLen = 40;
+    const bbLen = 20;
+    const mult = 2;
 
-    for (let i = 1; i <= period; i++) {
-      const change = closes[i] - closes[i - 1];
-      if (change > 0) avgGain += change;
-      else avgLoss -= change;
+    function ema(src, len, i) {
+      const k = 2 / (len + 1);
+      let ema = src[i - 1] || src[i];
+      for (let j = i - len + 1; j <= i; j++) {
+        if (j < 0) continue;
+        ema = src[j] * k + ema * (1 - k);
+      }
+      return ema;
+    }
+
+    for (let i = 0; i < data.length; i++) {
+      if (i < slowLen || i < bbLen) {
+        result.push({ time: data[i].time, value: null });
+        continue;
+      }
+
+      const macd = ema(data.map(d => d.close), fastLen, i) - ema(data.map(d => d.close), slowLen, i);
+      const macdPrev = ema(data.map(d => d.close), fastLen, i - 1) - ema(data.map(d => d.close), slowLen, i - 1);
+      const t1 = (macd - macdPrev) * sensitivity;
+
+      result.push({
+        time: data[i].time,
+        value: t1,
+        color: t1 >= 0 ? 'green' : 'red'
+      });
+    }
+    return result;
+  }
+
+  function calculateRSI(closePrices, period = 14) {
+    const rsi = [];
+    let avgGain = 0, avgLoss = 0;
+
+    for (let i = 1; i < closePrices.length; i++) {
+      const diff = closePrices[i] - closePrices[i - 1];
+      avgGain += diff > 0 ? diff : 0;
+      avgLoss += diff < 0 ? -diff : 0;
     }
 
     avgGain /= period;
     avgLoss /= period;
-    rsi[period] = 100 - (100 / (1 + avgGain / avgLoss));
 
-    for (let i = period + 1; i < closes.length; i++) {
-      const change = closes[i] - closes[i - 1];
-      const gain = change > 0 ? change : 0;
-      const loss = change < 0 ? -change : 0;
+    rsi[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
 
+    for (let i = period + 1; i < closePrices.length; i++) {
+      const diff = closePrices[i] - closePrices[i - 1];
+      const gain = diff > 0 ? diff : 0;
+      const loss = diff < 0 ? -diff : 0;
       avgGain = (avgGain * (period - 1) + gain) / period;
       avgLoss = (avgLoss * (period - 1) + loss) / period;
-
-      rsi[i] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+      rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
     }
 
     return rsi;
   }
 
-  function calculateMomentum(candles) {
-    const sensitivity = 150;
-    const fastLength = 20;
-    const slowLength = 40;
-
-    const closes = candles.map(c => c.close);
-    const fast = ema(closes, fastLength);
-    const slow = ema(closes, slowLength);
-    const macd = fast.map((v, i) => v - slow[i]);
-    const t1 = macd.map((v, i) => i === 0 ? 0 : (v - macd[i - 1]) * sensitivity);
-
-    return candles.map((c, i) => ({
-      time: c.time,
-      value: t1[i],
-      color: t1[i] >= 0 ? 'rgba(0,200,0,0.5)' : 'rgba(255,0,0,0.5)'
-    }));
-  }
-
-  function ema(src, len) {
-    const alpha = 2 / (len + 1);
-    const result = [src[0]];
-    for (let i = 1; i < src.length; i++) {
-      result.push(result[i - 1] + alpha * (src[i] - result[i - 1]));
-    }
-    return result;
-  }
-
-  function drawChart(containerId, candles) {
-    const chartContainer = document.getElementById(containerId);
-chartContainer.style.height = '400px';
-chartContainer.style.width = '800px';
-
-const chart = LightweightCharts.createChart(chartContainer, {
-  width: 800,
-  height: 400
-});
-
-
+  function drawDailyChartWithIndicators(candles) {
+    const chartContainer = document.getElementById('dailyChart');
+    chartContainer.style.height = '400px';
+    chartContainer.style.width = '800px';
+    const chart = LightweightCharts.createChart(chartContainer, { height: 400, width: 800 });
     const candleSeries = chart.addCandlestickSeries();
     candleSeries.setData(candles);
 
-    const sma50Line = chart.addLineSeries({ color: '#FF6D00', lineWidth: 1 });
-    const sma200Line = chart.addLineSeries({ color: '#43A047', lineWidth: 1 });
+    const sma50 = calculateSMA(candles, 50);
+    const sma200 = calculateSMA(candles, 200);
+    chart.addLineSeries({ color: '#FF6D00' }).setData(sma50);
+    chart.addLineSeries({ color: '#43A047' }).setData(sma200);
 
-    sma50Line.setData(calculateSMA(candles, 50));
-    sma200Line.setData(calculateSMA(candles, 200));
-
-    const fractals = findFractals(candles);
-    for (const f of fractals) {
+    for (const f of findFractals(candles)) {
       chart.addShape({
         time: f.time,
         price: f.price,
@@ -140,31 +139,40 @@ const chart = LightweightCharts.createChart(chartContainer, {
         shapeId: `${f.time}-${f.price}`,
       });
     }
+
+    // Momentum
+    const momentumContainer = document.getElementById('momentumChart');
+    momentumContainer.style.height = '100px';
+    momentumContainer.style.width = '800px';
+    const momentumChart = LightweightCharts.createChart(momentumContainer, { height: 100, width: 800 });
+    const momentumSeries = momentumChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
+    momentumSeries.setData(calculateMomentum(candles));
+
+    // RSI
+    const rsiContainer = document.getElementById('rsiChart');
+    rsiContainer.style.height = '100px';
+    rsiContainer.style.width = '800px';
+    const rsiChart = LightweightCharts.createChart(rsiContainer, { height: 100, width: 800 });
+    const rsiValues = calculateRSI(candles.map(c => c.close));
+    const rsiSeries = rsiChart.addLineSeries({ color: '#7E57C2', lineWidth: 2 });
+    rsiSeries.setData(rsiValues.map((v, i) => ({ time: candles[i]?.time, value: v })));
+    rsiChart.addLineSeries({ color: '#ccc' }).setData(candles.map(c => ({ time: c.time, value: 70 })));
+    rsiChart.addLineSeries({ color: '#ccc' }).setData(candles.map(c => ({ time: c.time, value: 30 })));
+  }
+
+  function drawSimpleChart(containerId, candles) {
+    const container = document.getElementById(containerId);
+    container.style.height = '400px';
+    container.style.width = '800px';
+    const chart = LightweightCharts.createChart(container, { height: 400, width: 800 });
+    chart.addCandlestickSeries().setData(candles);
   }
 
   const dailyCandles = await fetchCandles('BTCUSDT', '1d', 300);
   const hourlyCandles = await fetchCandles('BTCUSDT', '1h', 300);
 
-  drawChart('dailyChart', dailyCandles);
-  drawChart('hourlyChart', hourlyCandles);
-
-  const momentumChart = LightweightCharts.createChart(document.getElementById('momentumChart'), {
-    width: 800, height: 100
-  });
-  const momentumSeries = momentumChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
-  momentumSeries.setData(calculateMomentum(dailyCandles));
-
-  const rsiChart = LightweightCharts.createChart(document.getElementById('rsiChart'), {
-    width: 800, height: 100
-  });
-  const rsiSeries = rsiChart.addLineSeries({ color: '#7E57C2', lineWidth: 2 });
-  const rsiData = calculateRSI(dailyCandles.map(c => c.close));
-  rsiSeries.setData(rsiData.map((v, i) => ({ time: dailyCandles[i]?.time, value: v })));
-
-  const rsiUpper = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
-  const rsiLower = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
-  rsiUpper.setData(dailyCandles.map(c => ({ time: c.time, value: 70 })));
-  rsiLower.setData(dailyCandles.map(c => ({ time: c.time, value: 30 })));
+  drawDailyChartWithIndicators(dailyCandles);
+  drawSimpleChart('hourlyChart', hourlyCandles);
 
   document.getElementById('aiBtn').onclick = async () => {
     const o = document.getElementById('out');
@@ -175,5 +183,4 @@ const chart = LightweightCharts.createChart(chartContainer, {
       o.textContent = 'Error: ' + (e.response?.data?.error || e.message);
     }
   };
-
 });
