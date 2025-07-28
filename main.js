@@ -136,29 +136,33 @@ function drawChart(containerId, candles, showIndicators = false) {
   }
 
   if (showIndicators) {
-    const momentumChart = LightweightCharts.createChart(document.createElement('div'), {
-      width: 800,
-      height: 100
-    });
-    const momentumSeries = momentumChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
-    momentumSeries.setData(calculateMomentum(candles));
-    document.getElementById(containerId).after(momentumChart._chart._container);
+  // MOMENTUM CHART
+  const momentumDiv = document.createElement('div');
+  momentumDiv.style.width = '800px';
+  momentumDiv.style.height = '100px';
+  document.getElementById(containerId).after(momentumDiv);
 
-    const rsiChart = LightweightCharts.createChart(document.createElement('div'), {
-      width: 800,
-      height: 100
-    });
-    const rsiSeries = rsiChart.addLineSeries({ color: '#7E57C2', lineWidth: 2 });
-    const rsiData = calculateRSI(candles.map(c => c.close));
-    rsiSeries.setData(rsiData.map((v, i) => ({ time: candles[i]?.time, value: v })));
+  const momentumChart = LightweightCharts.createChart(momentumDiv, { height: 100 });
+  const momentumSeries = momentumChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
+  momentumSeries.setData(calculateMomentum(candles));
 
-    const rsiUpper = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
-    const rsiLower = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
-    rsiUpper.setData(candles.map(c => ({ time: c.time, value: 70 })));
-    rsiLower.setData(candles.map(c => ({ time: c.time, value: 30 })));
+  // RSI CHART
+  const rsiDiv = document.createElement('div');
+  rsiDiv.style.width = '800px';
+  rsiDiv.style.height = '100px';
+  momentumDiv.after(rsiDiv);
 
-    document.getElementById(containerId).after(rsiChart._chart._container);
-  }
+  const rsiChart = LightweightCharts.createChart(rsiDiv, { height: 100 });
+  const rsiSeries = rsiChart.addLineSeries({ color: '#7E57C2', lineWidth: 2 });
+  const rsiData = calculateRSI(candles.map(c => c.close));
+  rsiSeries.setData(rsiData.map((v, i) => ({ time: candles[i]?.time, value: v })));
+
+  const rsiUpper = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
+  const rsiLower = rsiChart.addLineSeries({ color: '#ccc', lineWidth: 1 });
+  rsiUpper.setData(candles.map(c => ({ time: c.time, value: 70 })));
+  rsiLower.setData(candles.map(c => ({ time: c.time, value: 30 })));
+}
+
 }
 
 (async () => {
