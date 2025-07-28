@@ -1,115 +1,109 @@
-<!-- index.html -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Liquidity‑Cycle Dashboard</title>
-  <link rel="icon" href="/favicon.png" />
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      font-size: 22px;
-      margin: 2rem;
+// main.js
+
+// 1) Top‑10 USDT trading pairs
+const symbols = [
+  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT',
+  'SOLUSDT', 'DOGEUSDT', 'DOTUSDT', 'MATICUSDT', 'AVAXUSDT'
+];
+
+// 2) DOM references
+const symbolSelect = document.getElementById('symbolSelect');
+const dailyTitle   = document.getElementById('dailyTitle');
+const hourlyTitle  = document.getElementById('hourlyTitle');
+const aiBtn        = document.getElementById('aiBtn');
+const outPre       = document.getElementById('out');
+
+// 3) Populate the symbol dropdown
+symbols.forEach(sym => {
+  const opt = document.createElement('option');
+  opt.value = sym;
+  opt.text  = sym.replace('USDT', '/USDT');
+  symbolSelect.appendChild(opt);
+});
+
+// 4) Generate AI summary (GET + flexible parsing)
+async function generateAISummary() {
+  const sym = symbolSelect.value;
+  outPre.textContent = `Loading AI summary for ${sym}…`;
+
+  try {
+    const resp = await axios.get('/api/ai', {
+      params: { symbol: sym }
+    });
+    console.log('[AI] raw response:', resp);
+
+    let summary;
+    if (typeof resp.data === 'string') {
+      summary = resp.data;
+    } else if (resp.data.summary) {
+      summary = resp.data.summary;
+    } else if (resp.data.text) {
+      summary = resp.data.text;
+    } else {
+      summary = JSON.stringify(resp.data, null, 2);
     }
-    h1 { margin-bottom: 1rem; font-size: 32px; }
-    h2 { margin-top: 2rem; font-size: 26px; }
-    #dailyChart,
-    #hourlyChart {
-      max-width: 800px;
-      height: 400px;
-      margin-top: 1rem;
-    }
-    pre {
-      white-space: pre-wrap;
-      background: #f6f6f6;
-      padding: 1rem;
-      font-size: 20px;
-      line-height: 1.5;
-      max-width: 800px;
-      margin-top: 0.5rem;
-    }
-    button {
-      margin-bottom: 1rem;
-      padding: 0.75rem 1.5rem;
-      font-size: 20px;
-      cursor: pointer;
-      border: none;
-      background-color: #1976d2;
-      color: white;
-      border-radius: 5px;
-    }
-    .explanation {
-      font-size: 22px;
-      line-height: 1.7;
-      max-width: 800px;
-      margin-top: 2rem;
-    }
-    .explanation ul {
-      margin-top: 0.5rem;
-      padding-left: 1.4rem;
-    }
-    .explanation li {
-      margin-bottom: 0.75rem;
-    }
-  </style>
-</head>
-<body>
-  <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
 
-  <!-- Symbol selector -->
-  <div style="margin-bottom: 1.5rem;">
-    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">
-      Select Symbol:
-    </label>
-    <select id="symbolSelect" style="font-size:20px; padding:0.3rem;">
-      <!-- options populated by JS -->
-    </select>
-  </div>
+    outPre.textContent = summary;
+  } catch (err) {
+    console.error('[AI] error', err);
+    outPre.textContent = `❌ AI error: ${err.message}`;
+  }
+}
 
-  <!-- AI Summary -->
-  <button id="aiBtn">AI Summary</button>
-  <pre id="out"></pre>
+// 5) Attach AI button handler
+aiBtn.addEventListener('click', generateAISummary);
 
-  <!-- Charts -->
-  <h2 id="dailyTitle">BTCUSDT — Daily</h2>
-  <div id="dailyChart"></div>
+// 6) Unified dashboard update
+async function updateDashboard() {
+  const sym = symbolSelect.value;
 
-  <h2 id="hourlyTitle">BTCUSDT — 1 Hour</h2>
-  <div id="hourlyChart"></div>
+  // update titles
+  dailyTitle.textContent  = `${sym} — Daily`;
+  hourlyTitle.textContent = `${sym} — 1 Hour`;
 
-  <!-- Explanation moved below charts -->
-  <div class="explanation">
-    <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
-    <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
-    <p>Instead of watching dozens of charts or guessing when to trade, this dashboard shows you how Bitcoin (BTCUSDT) is behaving across two key timeframes:</p>
-    <ul>
-      <li>📅 <strong>Daily chart</strong> – the big picture trend</li>
-      <li>🕐 <strong>Hourly chart</strong> – short-term moves</li>
-    </ul>
-    <p><strong>The goal?</strong><br>
-    To spot shifts in momentum and liquidity – so you trade with the market, not against it.</p>
+  // redraw charts
+  await fetchAndDraw(sym, 'daily',  '1d', 'dailyChart');
+  await fetchAndDraw(sym, 'hourly', '1h', 'hourlyChart');
 
-    <h4>Why It’s Called “Liquidity‑Cycle”</h4>
-    <p>In every market, price moves in cycles – from accumulation to expansion, then slowdown and reversal. These cycles are driven by liquidity (where the money is). This dashboard makes it easier to:</p>
-    <ul>
-      <li>✅ See when buyers/sellers are taking control</li>
-      <li>✅ Time entries during expansions, not chop</li>
-      <li>✅ Avoid trades when liquidity dries up</li>
-    </ul>
+  // then auto‐run the AI summary
+  await generateAISummary();
+}
 
-    <h4>What’s “v0.1”?</h4>
-    <p>This is the first public version, focused only on BTC/USDT.<br>
-    Future updates will include:</p>
-    <ul>
-      <li>📊 Trend strength indicators</li>
-      <li>📈 Volume + momentum overlays</li>
-      <li>🌍 Asset switching (ETH, SPX, DXY, etc.)</li>
-      <li>🧠 AI summaries and alerts</li>
-    </ul>
-  </div>
+// 7) Hook symbol change + initial load
+symbolSelect.addEventListener('change', updateDashboard);
+updateDashboard();
 
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="/main.js"></script>
-</body>
-</html>
+// ─── helper: fetch OHLC + draw ────────────────────────────────────
+async function fetchAndDraw(symbol, type, interval, containerId) {
+  const end   = Date.now();
+  const start = end - (type === 'daily'
+    ? 365 * 24 * 3600 * 1000
+    :   7 * 24 * 3600 * 1000);
+  const limit = type === 'daily' ? 365 : 168;
+
+  const resp = await axios.get('https://api.binance.com/api/v3/klines', {
+    params: { symbol, interval, startTime: start, endTime: end, limit }
+  });
+
+  const data = resp.data.map(k => ({
+    time:  k[0] / 1000,
+    open:  parseFloat(k[1]),
+    high:  parseFloat(k[2]),
+    low:   parseFloat(k[3]),
+    close: parseFloat(k[4])
+  }));
+
+  const container = document.getElementById(containerId);
+  container.innerHTML = ''; // clear previous
+
+  const chart = LightweightCharts.createChart(container, {
+    width:  container.clientWidth,
+    height: container.clientHeight,
+    layout: { textColor: '#000' },
+    rightPriceScale: { scaleMargins: { top:0.1, bottom:0.1 } },
+    timeScale:        { timeVisible:true, secondsVisible:false }
+  });
+
+  const series = chart.addCandlestickSeries();
+  series.setData(data);
+}
