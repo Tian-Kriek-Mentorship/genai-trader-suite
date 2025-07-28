@@ -15,16 +15,12 @@ const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
 // ------------------ Fetch CoinGecko Candle Data ------------------
 async function fetchCoinGeckoCandles(symbolId, days = 30) {
-  const res = await fetch(`https://api.coingecko.com/api/v3/coins/${symbolId}/ohlc?vs_currency=usd&days=${days}`);
+  const res = await fetch(`/api/crypto?symbol=${symbolId}&days=${days}`);
   const data = await res.json();
-  return data.map(candle => ({
-    time: Math.floor(candle[0] / 1000),
-    open: candle[1],
-    high: candle[2],
-    low: candle[3],
-    close: candle[4],
-  }));
+  if (!data.candles) throw new Error("Unexpected data structure from proxy");
+  return data.candles;
 }
+
 
 // ------------------ Fibonacci Plot ------------------
 function plotFibonacci(chart, candles) {
