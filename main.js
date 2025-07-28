@@ -14,8 +14,8 @@ const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
 const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
 // ------------------ Fetch Close-Only Data ------------------
-async function fetchCoinGeckoCloses(coinId, days, interval = "daily") {
-  const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}&interval=${interval}`;
+async function fetchCoinGeckoCloses(coinId, days) {
+  const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
   const res = await fetch(url);
   const data = await res.json();
   if (!data.prices) throw new Error("Unexpected data structure from CoinGecko");
@@ -25,6 +25,7 @@ async function fetchCoinGeckoCloses(coinId, days, interval = "daily") {
     value: price,
   }));
 }
+
 
 // ------------------ Plot Fibonacci Levels ------------------
 function plotApproxFibonacci(chart, data) {
@@ -68,7 +69,8 @@ async function loadCharts(symbolId = "bitcoin") {
     dailySeries.setData(dailyData);
     plotApproxFibonacci(dailyChart, dailyData);
 
-    const h1Data = await fetchCoinGeckoCloses(symbolId, 60, "hourly");
+    const h1Data = await fetchCoinGeckoCloses(symbolId, 60); // ← No interval param
+
     h1Series.setData(h1Data);
     plotApproxFibonacci(h1Chart, h1Data);
   } catch (err) {
