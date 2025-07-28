@@ -1,6 +1,6 @@
 console.log("✅ main.js loaded");
 
-// Create charts from global LightweightCharts object
+// ------------------ Chart Setup ------------------
 const dailyChart = LightweightCharts.createChart(document.getElementById("dailyChart"), {
   width: 800,
   height: 400,
@@ -9,7 +9,6 @@ const h1Chart = LightweightCharts.createChart(document.getElementById("hourlyCha
   width: 800,
   height: 400,
 });
-
 
 const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
 const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
@@ -28,7 +27,7 @@ async function fetchCandles(symbol, interval) {
       low: parseFloat(candle.low),
       close: parseFloat(candle.close),
     }))
-    .reverse(); // API returns newest first, reverse for chart
+    .reverse(); // API returns newest first
 }
 
 // ------------------ Fibonacci Logic ------------------
@@ -36,7 +35,6 @@ function plotFibonacci(chart, candles) {
   const len = candles.length;
   if (len < 50) return;
 
-  // Find recent swing low and high
   let swingLow = candles[len - 50];
   let swingHigh = candles[len - 50];
 
@@ -54,7 +52,7 @@ function plotFibonacci(chart, candles) {
     ? [1.618, 2.618].map(mult => fibEnd.close + range * (mult - 1))
     : [1.618, 2.618].map(mult => fibEnd.close - range * (mult - 1));
 
-  levels.forEach((price, i) => {
+  levels.forEach(price => {
     const fibLine = chart.addLineSeries({
       color: isUptrend ? "green" : "red",
       lineWidth: 1,
@@ -69,29 +67,29 @@ function plotFibonacci(chart, candles) {
 
 // ------------------ Load + Plot ------------------
 async function loadCharts(symbol = "BTC/USD") {
-  const dailyData = await fetchCandles(symbol, "1day");
-  dailySeries.setData(dailyData);
-  plotFibonacci(dailyChart, dailyData);
+  try {
+    const dailyData = await fetchCandles(symbol, "1day");
+    dailySeries.setData(dailyData);
+    plotFibonacci(dailyChart, dailyData);
 
-  const h1Data = await fetchCandles(symbol, "1h");
-  h1Series.setData(h1Data);
-  plotFibonacci(h1Chart, h1Data);
+    const h1Data = await fetchCandles(symbol, "1h");
+    h1Series.setData(h1Data);
+    plotFibonacci(h1Chart, h1Data);
+  } catch (err) {
+    console.error("Load error:", err);
+  }
 }
 
-// Initial load
-loadCharts();
+loadCharts(); // Load default
 
-// ------------------ AI Summary Button ------------------
+// ------------------ AI Summary ------------------
 document.getElementById("aiBtn").addEventListener("click", async () => {
   const res = await fetch("/api/ai");
   const data = await res.json();
   document.getElementById("out").textContent = data.summary || "No summary found.";
 });
 
-// ------------------ Symbol Search Dropdown ------------------
-const symbolDropdown = document.getElementById("symbolSelect");
-
-symbolDropdown.addEventListener("change", (e) => {
-  const selectedSymbol = e.target.value;
-  loadCharts(selectedSymbol);
+// ------------------ Symbol Selector ------------------
+document.getElementById("symbolSelect").addEventListener("change", (e) => {
+  loadCharts(e.target.value);
 });
