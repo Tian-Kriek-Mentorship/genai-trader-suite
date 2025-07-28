@@ -1,6 +1,6 @@
 console.log("✅ main.js loaded");
 
-// ------------------ Chart Setup ------------------
+// ✅ Chart setup using global createChart
 const dailyChart = createChart(document.getElementById("dailyChart"), {
   width: 800,
   height: 400,
@@ -13,24 +13,22 @@ const h1Chart = createChart(document.getElementById("hourlyChart"), {
 const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
 const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
-// ------------------ Fetch from Your API ------------------
+// ✅ Fetch from your secure API
 async function fetchCandles(symbol, interval) {
   const res = await fetch(`/api/quotes?symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
   if (!res.ok) throw new Error("Failed to fetch candle data");
   const data = await res.json();
 
-  return data.values
-    .map(candle => ({
-      time: Math.floor(new Date(candle.datetime).getTime() / 1000),
-      open: parseFloat(candle.open),
-      high: parseFloat(candle.high),
-      low: parseFloat(candle.low),
-      close: parseFloat(candle.close),
-    }))
-    .reverse(); // Twelve Data returns most recent first
+  return data.values.map(c => ({
+    time: Math.floor(new Date(c.datetime).getTime() / 1000),
+    open: parseFloat(c.open),
+    high: parseFloat(c.high),
+    low: parseFloat(c.low),
+    close: parseFloat(c.close),
+  })).reverse(); // newest first, reverse for chart
 }
 
-// ------------------ Fibonacci Logic ------------------
+// ✅ Fibonacci levels
 function plotFibonacci(chart, candles) {
   const len = candles.length;
   if (len < 50) return;
@@ -53,41 +51,40 @@ function plotFibonacci(chart, candles) {
     : [1.618, 2.618].map(mult => fibEnd.close - range * (mult - 1));
 
   levels.forEach(price => {
-    const fibLine = chart.addLineSeries({
+    const line = chart.addLineSeries({
       color: isUptrend ? "green" : "red",
       lineWidth: 1,
       lineStyle: 1,
     });
-    fibLine.setData([
+    line.setData([
       { time: fibStart.time, value: price },
       { time: candles[len - 1].time, value: price },
     ]);
   });
 }
 
-// ------------------ Load + Plot ------------------
+// ✅ Load chart data
 async function loadCharts(symbol = "BTC/USD") {
-  const dailyData = await fetchCandles(symbol, "1day");
-  dailySeries.setData(dailyData);
-  plotFibonacci(dailyChart, dailyData);
+  const daily = await fetchCandles(symbol, "1day");
+  dailySeries.setData(daily);
+  plotFibonacci(dailyChart, daily);
 
-  const h1Data = await fetchCandles(symbol, "1h");
-  h1Series.setData(h1Data);
-  plotFibonacci(h1Chart, h1Data);
+  const h1 = await fetchCandles(symbol, "1h");
+  h1Series.setData(h1);
+  plotFibonacci(h1Chart, h1);
 }
 
-// ------------------ Initial Load ------------------
+// Initial load
 loadCharts();
 
-// ------------------ AI Summary Button ------------------
+// ✅ AI Summary button
 document.getElementById("aiBtn").addEventListener("click", async () => {
   const res = await fetch("/api/ai");
   const data = await res.json();
-  document.getElementById("out").textContent = data.summary || "No summary found.";
+  document.getElementById("out").textContent = data.summary || "No summary available.";
 });
 
-// ------------------ Symbol Selector ------------------
+// ✅ Symbol dropdown
 document.getElementById("symbolSelect").addEventListener("change", (e) => {
-  const selectedSymbol = e.target.value;
-  loadCharts(selectedSymbol);
+  loadCharts(e.target.value);
 });
