@@ -1,7 +1,6 @@
 console.log('✅ MAIN.JS LOADED', Date.now());
 
-// ✅ Use window.LightweightCharts to avoid undefined error
-const chart = window.LightweightCharts.createChart(
+const chart = LightweightCharts.createChart(
   document.getElementById('chartContainer'),
   { width: 800, height: 400 }
 );
