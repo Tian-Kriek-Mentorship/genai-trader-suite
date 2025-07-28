@@ -1,19 +1,15 @@
 console.log("✅ main.js loaded");
 
-// Import from lightweight-charts CDN (still ESM-safe)
-import {
-  createChart
-} from 'https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js';
+// Create charts from global LightweightCharts object
+const dailyChart = LightweightCharts.createChart(document.getElementById("dailyChart"), {
+  width: 800,
+  height: 400,
+});
+const h1Chart = LightweightCharts.createChart(document.getElementById("hourlyChart"), {
+  width: 800,
+  height: 400,
+});
 
-// ------------------ Chart Setup ------------------
-const dailyChart = createChart(document.getElementById("dailyChart"), {
-  width: 800,
-  height: 400,
-});
-const h1Chart = createChart(document.getElementById("hourlyChart"), {
-  width: 800,
-  height: 400,
-});
 
 const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
 const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
