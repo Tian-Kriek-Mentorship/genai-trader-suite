@@ -3,10 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <title>Liquidity‑Cycle Dashboard</title>
-
-    <!-- optional favicon: drop favicon.png in repo root -->
     <link rel="icon" href="/favicon.png" />
-
     <style>
       body{font-family:system-ui,sans-serif;margin:2rem}
       #chartContainer{max-width:800px;height:400px;margin-top:1rem}
@@ -19,12 +16,13 @@
 
     <button id="aiBtn">AI Summary</button>
     <pre id="out"></pre>
+    <!-- CHANGED: div id="chartContainer" (no global “chart” anymore) -->
     <div id="chartContainer"></div>
 
-    <!-- 1 · Lightweight‑Charts standalone bundle -->
+    <!-- Lightweight‑Charts bundle (puts window.LightweightCharts) -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 
-    <!-- 2 · Dashboard logic -->
+    <!-- Your dashboard code -->
     <script type="module" src="/main.js"></script>
   </body>
 </html>
