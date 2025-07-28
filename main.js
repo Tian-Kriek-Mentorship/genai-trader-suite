@@ -1,6 +1,5 @@
 console.log("✅ main.js loaded");
 
-// Create charts
 const dailyChart = LightweightCharts.createChart(document.getElementById("dailyChart"), {
   width: 800,
   height: 400,
@@ -13,32 +12,34 @@ const h1Chart = LightweightCharts.createChart(document.getElementById("hourlyCha
 const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
 const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
-// ------------------ EMA Function ------------------
+// ------------------ EMA ------------------
 function calculateEMA(data, period = 45) {
   const k = 2 / (period + 1);
-  let emaArray = [];
-  let emaPrev;
+  const emaData = [];
+  let ema;
 
   for (let i = 0; i < data.length; i++) {
     const price = data[i].close;
     const time = data[i].time;
 
-    if (i < period - 1) continue;
-
-    if (i === period - 1) {
-      const sum = data.slice(i - period + 1, i + 1).reduce((acc, d) => acc + d.close, 0);
-      emaPrev = sum / period;
+    if (i < period) {
+      continue;
+    } else if (i === period) {
+      const sum = data.slice(i - period, i).reduce((acc, d) => acc + d.close, 0);
+      ema = sum / period;
     } else {
-      emaPrev = price * k + emaPrev * (1 - k);
+      ema = price * k + ema * (1 - k);
     }
 
-    emaArray.push({ time, value: emaPrev });
+    if (ema) {
+      emaData.push({ time, value: ema });
+    }
   }
 
-  return emaArray;
+  return emaData;
 }
 
-// ------------------ Fibonacci Plot ------------------
+// ------------------ Fibonacci ------------------
 function plotFibonacci(chart, candles) {
   const len = candles.length;
   if (len < 50) return;
@@ -56,30 +57,26 @@ function plotFibonacci(chart, candles) {
   const range = Math.abs(swingHigh.close - swingLow.close);
 
   const fibPercents = [0.382, 0.5, 0.618, 1, 1.618, 2.618];
-  const levels = fibPercents.map(pct => {
-    return isUptrend
+
+  fibPercents.forEach(pct => {
+    const level = isUptrend
       ? fibStart.close + range * pct
       : fibStart.close - range * pct;
-  });
 
-  levels.forEach(price => {
-    const fibLine = chart.addLineSeries({
+    chart.createPriceLine({
+      price: level,
       color: isUptrend ? "green" : "red",
       lineWidth: 1,
-      lineStyle: 1,
+      lineStyle: 2,
     });
-    fibLine.setData([
-      { time: fibStart.time, value: price },
-      { time: candles[len - 1].time, value: price },
-    ]);
   });
 }
 
-// ------------------ Fetch CoinGecko Candle Data ------------------
+// ------------------ Fetch from Proxy ------------------
 async function fetchCoinGeckoCandles(symbolId, days = 30) {
   const res = await fetch(`/api/crypto?symbol=${symbolId}&days=${days}`);
   const data = await res.json();
-  if (!data.candles || !Array.isArray(data.candles)) throw new Error("Invalid candle structure");
+  if (!Array.isArray(data.candles)) throw new Error("Candle structure invalid");
   return data.candles;
 }
 
@@ -91,35 +88,33 @@ async function loadCharts(symbolId = "bitcoin") {
     plotFibonacci(dailyChart, dailyData);
 
     const emaData = calculateEMA(dailyData);
-    const emaSeries = dailyChart.addLineSeries({ color: "#FF00FF", lineWidth: 2 });
-    emaSeries.setData(emaData);
+    const emaLine = dailyChart.addLineSeries({ color: "magenta", lineWidth: 2 });
+    emaLine.setData(emaData);
 
     const h1Data = await fetchCoinGeckoCandles(symbolId, 60);
     h1Series.setData(h1Data);
     plotFibonacci(h1Chart, h1Data);
+
   } catch (err) {
     console.error("Chart loading error:", err);
   }
 }
 
-// ------------------ AI Summary ------------------
+// ------------------ AI Summary Button ------------------
 document.getElementById("aiBtn").addEventListener("click", async () => {
   const res = await fetch("/api/ai");
   const data = await res.json();
   document.getElementById("out").textContent = data.summary || "No summary found.";
 });
 
-// ------------------ Symbol Selector ------------------
-const symbolDropdown = document.getElementById("symbolSelect");
-symbolDropdown.addEventListener("change", (e) => {
-  const selected = e.target.value;
-  const coinGeckoMap = {
+// ------------------ Dropdown Symbol Selector ------------------
+document.getElementById("symbolSelect").addEventListener("change", (e) => {
+  const symbolMap = {
     "BTC/USD": "bitcoin",
     "ETH/USD": "ethereum",
   };
-  const coinId = coinGeckoMap[selected] || "bitcoin";
-  loadCharts(coinId);
+  loadCharts(symbolMap[e.target.value] || "bitcoin");
 });
 
-// Initial load
+// Initial
 loadCharts("bitcoin");
