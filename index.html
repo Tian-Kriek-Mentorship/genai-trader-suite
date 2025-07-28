@@ -18,7 +18,7 @@
 
       h2 {
         margin-top: 2rem;
-        font-size: 1.4rem;
+        font-size: 1.5rem;
       }
 
       #dailyChart,
@@ -52,49 +52,51 @@
         line-height: 1.6;
         max-width: 600px;
       }
+
+      select {
+        margin: 1rem 0;
+        font-size: 1rem;
+        padding: 0.5rem;
+      }
     </style>
   </head>
   <body>
-    <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
-
+    <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
     <button id="aiBtn">AI Summary</button>
+    <pre id="out"></pre>
+
+    <label for="symbolSelect"><strong>Symbol:</strong></label>
     <select id="symbolSelect">
-      <option value="BTC/USD" selected>BTC/USD</option>
+      <option value="BTC/USD">BTC/USD</option>
       <option value="ETH/USD">ETH/USD</option>
       <option value="EUR/USD">EUR/USD</option>
       <option value="NVDA">NVDA</option>
     </select>
 
-    <pre id="out"></pre>
-
     <div class="grid-layout">
       <div>
-        <h2>Daily Chart</h2>
+        <h2>BTCUSD — Daily</h2>
         <div id="dailyChart"></div>
 
-        <h2>1H Chart</h2>
+        <h2>BTCUSD — Hourly</h2>
         <div id="hourlyChart"></div>
       </div>
 
       <div class="explanation">
-        <h3>What Is the Liquidity‑Cycle Dashboard?</h3>
-        <p>
-          This dashboard shows how liquidity is entering or exiting the market
-          using two charts per symbol: daily and 1-hour. It helps identify
-          trending vs. choppy conditions and gives early warning of shifts in
-          buyer/seller momentum.
-        </p>
-        <p>
-          Future updates will include more symbols, volume overlays, and AI
-          alerts.
-        </p>
+        <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
+        <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto, forex, and equity markets.</p>
+        <ul>
+          <li>📅 <strong>Daily chart</strong> – big-picture trend</li>
+          <li>🕐 <strong>Hourly chart</strong> – short-term structure</li>
+        </ul>
+        <p><strong>Goal:</strong> Spot shifts in momentum and liquidity to trade with the market — not against it.</p>
       </div>
     </div>
 
-    <!-- ✅ Chart library loaded first -->
+    <!-- ✅ Chart library first -->
     <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
 
-    <!-- ✅ Then your script -->
+    <!-- ✅ Your logic -->
     <script src="/main.js"></script>
   </body>
 </html>
