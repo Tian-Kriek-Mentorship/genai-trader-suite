@@ -110,10 +110,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   function drawChart(containerId, candles) {
-    const chart = LightweightCharts.createChart(document.getElementById(containerId), {
-      width: 800,
-      height: 400
-    });
+    const chartContainer = document.getElementById(containerId);
+chartContainer.style.height = '400px';
+chartContainer.style.width = '800px';
+
+const chart = LightweightCharts.createChart(chartContainer, {
+  width: 800,
+  height: 400
+});
+
 
     const candleSeries = chart.addCandlestickSeries();
     candleSeries.setData(candles);
