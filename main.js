@@ -8,8 +8,10 @@ const symbols = [
 const symbolSelect = document.getElementById('symbolSelect');
 const dailyTitle   = document.getElementById('dailyTitle');
 const hourlyTitle  = document.getElementById('hourlyTitle');
+const aiBtn        = document.getElementById('aiBtn');
+const outPre       = document.getElementById('out');
 
-// 2. Populate the dropdown
+// Populate dropdown
 symbols.forEach(sym => {
   const opt = document.createElement('option');
   opt.value = sym;
@@ -17,34 +19,31 @@ symbols.forEach(sym => {
   symbolSelect.appendChild(opt);
 });
 
-// 3. Handle selection changes
+// On symbol change → redraw charts
 symbolSelect.addEventListener('change', () => {
   const sym = symbolSelect.value;
   dailyTitle.textContent  = `${sym} — Daily`;
   hourlyTitle.textContent = `${sym} — 1 Hour`;
-  fetchAndDraw(sym, 'daily',  '1d', 'dailyChart');
-  fetchAndDraw(sym, 'hourly', '1h', 'hourlyChart');
+  fetchAndDraw(sym, 'daily',  '1d', 'dailyChart')
+    .then(() => fetchAndDraw(sym, 'hourly', '1h', 'hourlyChart'))
+    .then(() => {
+      // after both charts are drawn, auto‑trigger AI summary
+      aiBtn.click();
+    });
 });
 
-// 4. Initial render
+// Initial render + auto‑AI on load
 document.addEventListener('DOMContentLoaded', () => {
   symbolSelect.value = symbols[0];
   symbolSelect.dispatchEvent(new Event('change'));
 });
 
-/**
- * Fetch OHLC data from Binance and draw a candlestick chart
- *
- * @param {string} symbol      e.g. 'BTCUSDT'
- * @param {string} type        'daily' or 'hourly'
- * @param {string} interval    Binance API interval ('1d' or '1h')
- * @param {string} containerId ID of the chart div
- */
+// Fetch & draw helper
 async function fetchAndDraw(symbol, type, interval, containerId) {
   const end = Date.now();
   const start = end - (type === 'daily'
-    ? 365 * 24 * 3600 * 1000  // past year
-    : 7   * 24 * 3600 * 1000); // past week
+    ? 365 * 24 * 3600 * 1000
+    : 7   * 24 * 3600 * 1000);
   const limit = type === 'daily' ? 365 : 168;
 
   const resp = await axios.get('https://api.binance.com/api/v3/klines', {
@@ -72,3 +71,5 @@ async function fetchAndDraw(symbol, type, interval, containerId) {
   const series = chart.addCandlestickSeries();
   series.setData(data);
 }
+
+// (Assumes you already have an event listener on #aiBtn that fills #out)
