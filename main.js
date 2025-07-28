@@ -1,5 +1,6 @@
 console.log("✅ main.js loaded");
 
+// Chart setup
 const dailyChart = LightweightCharts.createChart(document.getElementById("dailyChart"), {
   width: 800,
   height: 400,
@@ -12,109 +13,100 @@ const h1Chart = LightweightCharts.createChart(document.getElementById("hourlyCha
 const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
 const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
-// ------------------ EMA ------------------
-function calculateEMA(data, period = 45) {
-  const k = 2 / (period + 1);
-  const emaData = [];
-  let ema;
+const dailyEmaSeries = dailyChart.addLineSeries({ color: "#00C853", lineWidth: 1 });
 
-  for (let i = 0; i < data.length; i++) {
-    const price = data[i].close;
-    const time = data[i].time;
-
-    if (i < period) {
-      continue;
-    } else if (i === period) {
-      const sum = data.slice(i - period, i).reduce((acc, d) => acc + d.close, 0);
-      ema = sum / period;
-    } else {
-      ema = price * k + ema * (1 - k);
-    }
-
-    if (ema) {
-      emaData.push({ time, value: ema });
-    }
+// ------------------ Fetch IG Candle Data ------------------
+async function fetchIGCandles(symbol, resolution = "DAY", points = 500) {
+  const res = await fetch(`/api/ig-price?symbol=${symbol}&resolution=${resolution}&points=${points}`);
+  const json = await res.json();
+  if (!json.candles || !Array.isArray(json.candles)) {
+    console.error("Unexpected response:", json);
+    return [];
   }
-
-  return emaData;
+  return json.candles;
 }
 
-// ------------------ Fibonacci ------------------
+// ------------------ Fibonacci Extensions ------------------
 function plotFibonacci(chart, candles) {
   const len = candles.length;
-  if (len < 50) return;
+  if (len < 60) return;
 
-  let swingLow = candles[len - 50];
-  let swingHigh = candles[len - 50];
+  let swingLow = candles[len - 60];
+  let swingHigh = candles[len - 60];
 
-  for (let i = len - 50; i < len; i++) {
+  for (let i = len - 60; i < len; i++) {
     if (candles[i].low < swingLow.low) swingLow = candles[i];
     if (candles[i].high > swingHigh.high) swingHigh = candles[i];
   }
 
   const isUptrend = swingHigh.time > swingLow.time;
   const fibStart = isUptrend ? swingLow : swingHigh;
-  const range = Math.abs(swingHigh.close - swingLow.close);
+  const fibEnd = isUptrend ? swingHigh : swingLow;
+  const range = Math.abs(fibEnd.close - fibStart.close);
 
-  const fibPercents = [0.382, 0.5, 0.618, 1, 1.618, 2.618];
+  const customLevels = [1.27, 1.618, 2.0, 2.618];
+  const levels = isUptrend
+    ? customLevels.map(level => fibEnd.close + range * (level - 1))
+    : customLevels.map(level => fibEnd.close - range * (level - 1));
 
-  fibPercents.forEach(pct => {
-    const level = isUptrend
-      ? fibStart.close + range * pct
-      : fibStart.close - range * pct;
-
-    chart.createPriceLine({
-      price: level,
+  levels.forEach(price => {
+    const fibLine = chart.addLineSeries({
       color: isUptrend ? "green" : "red",
       lineWidth: 1,
-      lineStyle: 2,
+      lineStyle: 1,
     });
+    fibLine.setData([
+      { time: fibStart.time, value: price },
+      { time: candles[len - 1].time, value: price },
+    ]);
   });
 }
 
-// ------------------ Fetch from Proxy ------------------
-async function fetchCoinGeckoCandles(symbolId, days = 30) {
-  const res = await fetch(`/api/crypto?symbol=${symbolId}&days=${days}`);
-  const data = await res.json();
-  if (!Array.isArray(data.candles)) throw new Error("Candle structure invalid");
-  return data.candles;
+// ------------------ 45 EMA ------------------
+function calculateEMA(candles, period = 45) {
+  const ema = [];
+  const k = 2 / (period + 1);
+  let prevEma = candles[0].close;
+
+  for (let i = 0; i < candles.length; i++) {
+    const price = candles[i].close;
+    prevEma = price * k + prevEma * (1 - k);
+    ema.push({ time: candles[i].time, value: prevEma });
+  }
+  return ema;
 }
 
 // ------------------ Load Charts ------------------
-async function loadCharts(symbolId = "bitcoin") {
+async function loadCharts(symbol = "CS.D.BITCOIN.CFD.IP") {
   try {
-    const dailyData = await fetchCoinGeckoCandles(symbolId, 365);
+    const dailyData = await fetchIGCandles(symbol, "DAY", 365);
+    const h1Data = await fetchIGCandles(symbol, "HOUR", 90 * 24);
+
+    if (dailyData.length === 0 || h1Data.length === 0) {
+      console.warn("No data returned");
+      return;
+    }
+
     dailySeries.setData(dailyData);
-    plotFibonacci(dailyChart, dailyData);
-
-    const emaData = calculateEMA(dailyData);
-    const emaLine = dailyChart.addLineSeries({ color: "magenta", lineWidth: 2 });
-    emaLine.setData(emaData);
-
-    const h1Data = await fetchCoinGeckoCandles(symbolId, 60);
     h1Series.setData(h1Data);
-    plotFibonacci(h1Chart, h1Data);
 
+    // 45 EMA
+    const emaData = calculateEMA(dailyData, 45);
+    dailyEmaSeries.setData(emaData);
+
+    // Fib levels
+    plotFibonacci(dailyChart, dailyData);
+    plotFibonacci(h1Chart, h1Data);
   } catch (err) {
     console.error("Chart loading error:", err);
   }
 }
 
-// ------------------ AI Summary Button ------------------
-document.getElementById("aiBtn").addEventListener("click", async () => {
-  const res = await fetch("/api/ai");
-  const data = await res.json();
-  document.getElementById("out").textContent = data.summary || "No summary found.";
-});
-
-// ------------------ Dropdown Symbol Selector ------------------
+// ------------------ Symbol Switch ------------------
 document.getElementById("symbolSelect").addEventListener("change", (e) => {
-  const symbolMap = {
-    "BTC/USD": "bitcoin",
-    "ETH/USD": "ethereum",
-  };
-  loadCharts(symbolMap[e.target.value] || "bitcoin");
+  const selected = e.target.value;
+  loadCharts(selected);
 });
 
-// Initial
-loadCharts("bitcoin");
+// ------------------ Initial Load ------------------
+loadCharts("CS.D.BITCOIN.CFD.IP");
