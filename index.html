@@ -9,25 +9,44 @@
         font-family: system-ui, sans-serif;
         margin: 2rem;
       }
-      #chartContainer {
+
+      h2 {
+        margin-top: 3rem;
+      }
+
+      #dailyChart,
+      #hourlyChart {
         max-width: 800px;
         height: 400px;
         margin-top: 1rem;
       }
+
       pre {
         white-space: pre-wrap;
         background: #f6f6f6;
         padding: 0.5rem;
       }
+
+      button {
+        margin-top: 1rem;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+      }
     </style>
   </head>
   <body>
     <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
+
     <button id="aiBtn">AI Summary</button>
     <pre id="out"></pre>
-    <div id="chartContainer"></div>
 
-    <!-- ✅ Load scripts in correct order -->
+    <h2>BTCUSDT — Daily</h2>
+    <div id="dailyChart"></div>
+
+    <h2>BTCUSDT — 1 Hour</h2>
+    <div id="hourlyChart"></div>
+
+    <!-- Load required libraries -->
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
     <script src="/main.js"></script>
