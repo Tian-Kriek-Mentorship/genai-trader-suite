@@ -6,8 +6,8 @@
     <link rel="icon" href="/favicon.png" />
     <style>
       body{font-family:system-ui,sans-serif;margin:2rem}
-      #chart{max-width:800px;height:400px;margin-top:1rem}
-      pre{white-space:pre-wrap;background:#f6f6f6;padding:0.5rem}
+      #chartContainer{max-width:800px;height:400px;margin-top:1rem}
+      pre{white-space:pre-wrap;background:#f6f6f6;padding:.5rem}
     </style>
   </head>
 
@@ -16,12 +16,13 @@
 
     <button id="aiBtn">AI Summary</button>
     <pre id="out"></pre>
-    <canvas id="chart"></canvas>
+    <!-- CHANGED: div id="chartContainer" (no global “chart” anymore) -->
+    <div id="chartContainer"></div>
 
-    <!-- 1 ▸ load full Lightweight‑Charts (puts `window.LightweightCharts`) -->
+    <!-- Lightweight‑Charts bundle (puts window.LightweightCharts) -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 
-    <!-- 2 ▸ your dashboard logic -->
+    <!-- Your dashboard code -->
     <script type="module" src="/main.js"></script>
   </body>
 </html>
