@@ -12,10 +12,14 @@ const forexSymbols = [
   'USDCAD','USDCHF','NZDUSD'
 ];
 const symbols = [...cryptoSymbols, ...forexSymbols];
-const FX_API_KEY = '2c89d3c16785a95303f907db6b6f8488';
-const fxCache = {};
-const charts  = {};
 
+// ← Your real ForexRateAPI key here:
+const FX_API_KEY = '2c89d3c16785a95303f907db6b6f8488';
+
+const fxCache    = {};   // { SYMBOL: { timestamp: ms, data: [...] } }
+const charts     = {};   // stash chart instances & data
+
+// DOM refs (script is at end of body)
 const symbolSelect  = document.getElementById('symbolSelect');
 const dailyTitle    = document.getElementById('dailyTitle');
 const hourlyTitle   = document.getElementById('hourlyTitle');
@@ -32,16 +36,17 @@ async function generateAISummary() {
   outPre.textContent = `Loading AI summary for ${sym}…`;
   try {
     const resp = await axios.get('/api/ai', { params: { symbol: sym } });
-    const txt = typeof resp.data === 'string'
-      ? resp.data
-      : resp.data.summary
-        ? resp.data.summary
-        : resp.data.text
-          ? resp.data.text
-          : JSON.stringify(resp.data, null, 2);
+    const data = resp.data;
+    const txt = typeof data === 'string'
+      ? data
+      : data.summary
+        ? data.summary
+        : data.text
+          ? data.text
+          : JSON.stringify(data, null, 2);
     outPre.textContent = txt;
   } catch (e) {
-    console.error(e);
+    console.error('AI summary error', e);
     outPre.textContent = `❌ AI error: ${e.message}`;
   }
 }
@@ -49,14 +54,14 @@ async function generateAISummary() {
 // —————————————————————————————————————————————————————————————————————
 // 3) Indicators: EMA, SMA, RSI
 // —————————————————————————————————————————————————————————————————————
-function ema(arr, period) {
-  const k = 2/(period+1), out = [], n = arr.length;
+function ema(arr, p) {
+  const k = 2/(p+1), out = [], n = arr.length;
   let prev;
-  for (let i=0; i<n; i++) {
-    if (i === period-1) {
-      prev = arr.slice(0,period).reduce((a,b)=>a+b,0)/period;
+  for (let i = 0; i < n; i++) {
+    if (i === p-1) {
+      prev = arr.slice(0,p).reduce((a,b)=>a+b,0)/p;
       out[i] = prev;
-    } else if (i >= period) {
+    } else if (i >= p) {
       prev = arr[i]*k + prev*(1-k);
       out[i] = prev;
     } else {
@@ -66,76 +71,86 @@ function ema(arr, period) {
   return out;
 }
 
-function sma(arr, period) {
+function sma(arr, p) {
   const out = [], n = arr.length;
-  for (let i=0; i<n; i++) {
-    if (i < period-1) { out.push(null); continue; }
-    let sum=0;
-    for (let j=i-period+1; j<=i; j++) sum+=arr[j];
-    out.push(sum/period);
+  for (let i = 0; i < n; i++) {
+    if (i < p-1) { out.push(null); continue; }
+    let sum = 0;
+    for (let j = i-p+1; j <= i; j++) sum += arr[j];
+    out.push(sum/p);
   }
   return out;
 }
 
-function rsi(arr, period) {
-  const gains=[], losses=[], out=[];
-  for (let i=1; i<arr.length; i++) {
-    const d = arr[i]-arr[i-1];
-    gains.push(d>0?d:0);
-    losses.push(d<0?-d:0);
+function rsi(arr, p) {
+  const gains = [], losses = [], out = [];
+  for (let i = 1; i < arr.length; i++) {
+    const d = arr[i] - arr[i-1];
+    gains.push(d>0 ? d : 0);
+    losses.push(d<0 ? -d: 0);
   }
-  let avgG = gains.slice(0,period).reduce((a,b)=>a+b,0)/period;
-  let avgL = losses.slice(0,period).reduce((a,b)=>a+b,0)/period;
-  out[period] = 100 - (100/(1 + avgG/avgL));
-  for (let i=period+1; i<arr.length; i++) {
-    avgG = (avgG*(period-1) + gains[i-1]) / period;
-    avgL = (avgL*(period-1) + losses[i-1]) / period;
+  let avgG = gains.slice(0,p).reduce((a,b)=>a+b,0)/p;
+  let avgL = losses.slice(0,p).reduce((a,b)=>a+b,0)/p;
+  out[p] = 100 - (100/(1 + avgG/avgL));
+  for (let i = p+1; i < arr.length; i++) {
+    avgG = (avgG*(p-1) + gains[i-1]) / p;
+    avgL = (avgL*(p-1) + losses[i-1]) / p;
     out[i] = 100 - 100/(1 + avgG/avgL);
   }
   return out;
 }
 
 // —————————————————————————————————————————————————————————————————————
-// 4) Fetch FX daily (cache 1h)
+// 4) Fetch FX daily (cache for 1h)
 // —————————————————————————————————————————————————————————————————————
 async function getFXData(symbol) {
   const now = Date.now();
   if (fxCache[symbol] && (now - fxCache[symbol].timestamp) < 3600e3) {
     return fxCache[symbol].data;
   }
-  const toDate   = new Date().toISOString().slice(0,10);
-  const fromDate = new Date(now - 365*24*3600e3).toISOString().slice(0,10);
-  const from = symbol.slice(0,3), to = symbol.slice(3);
-  const url = `https://api.forexrateapi.com/v1/timeframe` +
-              `?api_key=${FX_API_KEY}` +
-              `&start_date=${fromDate}` +
-              `&end_date=${toDate}` +
-              `&base=${from}` +
-              `&currencies=${to}`;
-  const resp = await axios.get(url);
-  const rates = resp.data.rates;
-  const data = Object.entries(rates)
-    .map(([day,obj])=>({
-      time:  Math.floor(new Date(day).getTime()/1000),
-      open:  obj[to],
-      high:  obj[to],
-      low:   obj[to],
-      close: obj[to]
-    }))
-    .sort((a,b)=>a.time - b.time);
-  fxCache[symbol] = { timestamp: now, data };
-  return data;
+  try {
+    const toDate   = new Date().toISOString().slice(0,10);
+    const fromDate = new Date(now - 365*24*3600e3).toISOString().slice(0,10);
+    const base = symbol.slice(0,3), curr = symbol.slice(3);
+    const url = `https://api.forexrateapi.com/v1/timeframe` +
+                `?api_key=${FX_API_KEY}` +
+                `&start_date=${fromDate}` +
+                `&end_date=${toDate}` +
+                `&base=${base}` +
+                `&currencies=${curr}`;
+    const resp = await axios.get(url);
+    if (!resp.data || !resp.data.rates) {
+      console.error(`ForexRateAPI error for ${symbol}`, resp.data);
+      return [];
+    }
+    const rates = resp.data.rates;
+    const data = Object.entries(rates)
+      .map(([day,obj]) => {
+        const rate = obj[curr];
+        return {
+          time:  Math.floor(new Date(day).getTime()/1000),
+          open:  rate, high: rate,
+          low:   rate, close: rate
+        };
+      })
+      .sort((a,b) => a.time - b.time);
+    fxCache[symbol] = { timestamp: now, data };
+    return data;
+  } catch (e) {
+    console.error(`FX fetch error for ${symbol}`, e);
+    return [];
+  }
 }
 
 // —————————————————————————————————————————————————————————————————————
-// 5) fetchAndDraw: crypto vs FX
+// 5) fetchAndDraw: branch on crypto vs FX
 // —————————————————————————————————————————————————————————————————————
 async function fetchAndDraw(symbol, type, interval, cid) {
-  let data;
+  let data = [];
   if (symbol.endsWith('USDT')) {
     const resp = await axios.get(
       'https://api.binance.com/api/v3/klines',
-      { params: { symbol, interval, limit: 1000 } }
+      { params:{ symbol, interval, limit:1000 } }
     );
     data = resp.data.map(k=>({
       time: k[0]/1000,
@@ -160,17 +175,16 @@ async function fetchAndDraw(symbol, type, interval, cid) {
   if (interval === '1d') {
     const closes = data.map(d=>d.close);
     const arr    = ema(closes,45);
-    const ed     = data
-      .map((d,i)=>({ time:d.time, value:arr[i] }))
-      .filter(pt=>pt.value!=null);
-    const ls = chart.addLineSeries({ color:'orange', lineWidth:2 });
+    const ed     = data.map((d,i)=>({ time:d.time, value:arr[i] }))
+                       .filter(p=>p.value!=null);
+    const ls     = chart.addLineSeries({ color:'orange', lineWidth:2 });
     ls.setData(ed);
     charts[cid].emaArr = arr;
   }
 }
 
 // —————————————————————————————————————————————————————————————————————
-// 6) drawFibsOnChart
+// 6) drawFibsOnChart + auto‑zoom
 // —————————————————————————————————————————————————————————————————————
 function drawFibsOnChart(cid) {
   const e = charts[cid];
@@ -179,18 +193,16 @@ function drawFibsOnChart(cid) {
   const o = data.map(d=>d.open),
         h = data.map(d=>d.high),
         l = data.map(d=>d.low);
-  const m50 = sma(o,50),
-        m200= sma(o,200);
+  const m50 = sma(o,50), m200 = sma(o,200);
   let gc=-1, dc=-1;
   for (let i=1; i<o.length; i++){
-    if (m50[i]>m200[i] && m50[i-1]<=m200[i-1]) gc=i;
-    if (m50[i]<m200[i] && m50[i-1]>=m200[i-1]) dc=i;
+    if (m50[i]>m200[i]&& m50[i-1]<=m200[i-1]) gc=i;
+    if (m50[i]<m200[i]&& m50[i-1]>=m200[i-1]) dc=i;
   }
-  const up  = gc>dc,
-        idx = up?gc:dc;
+  const up = gc>dc, idx = up?gc:dc;
   if (idx<0) return;
-  let pre = idx,
-      start = ((up?dc:gc)>0?(up?dc:gc):0);
+  let pre=idx,
+      start=((up?dc:gc)>0?(up?dc:gc):0);
   for (let i=start; i<idx; i++){
     if (up? l[i]<l[pre] : h[i]>h[pre]) pre=i;
   }
@@ -206,44 +218,42 @@ function drawFibsOnChart(cid) {
         postP = up? h[post]: l[post],
         r     = Math.abs(postP-preP);
   const retr  = up? postP-r*0.618 : postP+r*0.618,
-        e127  = up? postP+r*0.27 : postP-r*0.27,
-        e618  = up? postP+r*0.618: postP-r*0.618,
-        e2618 = up? postP+r*1.618: postP-r*1.618;
+        e127  = up? postP+r*0.27  : postP-r*0.27,
+        e618  = up? postP+r*0.618 : postP-r*0.618,
+        e2618 = up? postP+r*1.618 : postP-r*1.618;
   let touched=false, m127=false;
   for (let i=post+1; i<data.length; i++){
-    if (up) { if (l[i]<=retr) touched=true; if (h[i]>=e127) m127=true; }
-    else    { if (h[i]>=retr) touched=true; if (l[i]<=e127) m127=true; }
+    if (up){ if (l[i]<=retr) touched=true; if (h[i]>=e127) m127=true; }
+    else  { if (h[i]>=retr) touched=true; if (l[i]<=e127) m127=true; }
   }
   const lvl = touched?e618:(!touched&&!m127?e127:e2618);
-  series.createPriceLine({
-    price: lvl, color:'darkgreen', lineWidth:2, axisLabelVisible:true
-  });
+  series.createPriceLine({ price:lvl, color:'darkgreen', lineWidth:2, axisLabelVisible:true });
   e.fibTarget = lvl;
   if (!e.zoomSeries) {
-    const zs = e.chart.addLineSeries({ color:'rgba(0,0,0,0)', lineWidth:0 });
+    const zs = chart.addLineSeries({ color:'rgba(0,0,0,0)', lineWidth:0 });
     e.zoomSeries = zs;
   }
   e.zoomSeries.setData([
-    { time:data[0].time, value:lvl },
+    { time:data[0].time,            value:lvl },
     { time:data[data.length-1].time, value:lvl }
   ]);
 }
 
 // —————————————————————————————————————————————————————————————————————
-// 7) drawEMAandProbability
+// 7) EMA & Probability overlay
 // —————————————————————————————————————————————————————————————————————
 function drawEMAandProbability(cid) {
   const e = charts[cid];
-  if (!e||!e.emaArr) return false;
+  if (!e || !e.emaArr) return false;
   const lastC = e.data[e.data.length-1].close;
   const lastE = e.emaArr[e.emaArr.length-1];
   const bull  = lastC > lastE;
   const id    = `${cid}-prob`;
   let div = document.getElementById(id);
   if (!div) {
-    div=document.createElement('div');
-    div.id=id;
-    Object.assign(div.style,{
+    div = document.createElement('div');
+    div.id = id;
+    Object.assign(div.style, {
       position:'absolute', top:'8px', left:'8px',
       zIndex:'20', fontSize:'16px', fontWeight:'bold',
       whiteSpace:'pre', pointerEvents:'none'
@@ -256,15 +266,15 @@ function drawEMAandProbability(cid) {
 }
 
 // —————————————————————————————————————————————————————————————————————
-// 8) drawRSIandSignal
+// 8) RSI & H1 Signal overlay
 // —————————————————————————————————————————————————————————————————————
 function drawRSIandSignal(cid, bullish) {
-  const e=charts[cid];
+  const e = charts[cid];
   if (!e) return null;
-  const arr=rsi(e.data.map(d=>d.close),13);
-  const val=arr[arr.length-1];
-  const valid=arr.filter(v=>v!=null);
-  const maVal=sma(valid,14).slice(-1)[0];
+  const arr = rsi(e.data.map(d=>d.close),13);
+  const val = arr[arr.length-1];
+  const valid = arr.filter(v=>v!=null);
+  const maVal = sma(valid,14).slice(-1)[0];
   let txt, clr, rtn=null;
   if (bullish) {
     if (val<50 && val>maVal) { txt='Buy Signal confirmed'; clr='green'; rtn=true; }
@@ -276,9 +286,9 @@ function drawRSIandSignal(cid, bullish) {
   const id = `${cid}-rsi`;
   let div = document.getElementById(id);
   if (!div) {
-    div=document.createElement('div');
-    div.id=id;
-    Object.assign(div.style,{
+    div = document.createElement('div');
+    div.id = id;
+    Object.assign(div.style, {
       position:'absolute', top:'8px', left:'8px',
       zIndex:'20', fontSize:'16px', fontWeight:'bold',
       whiteSpace:'pre', pointerEvents:'none'
@@ -291,11 +301,11 @@ function drawRSIandSignal(cid, bullish) {
 }
 
 // —————————————————————————————————————————————————————————————————————
-// 9) Scanner
+// 9) Scanner (top‑20 default, live filter, H1 Target)
 // —————————————————————————————————————————————————————————————————————
 async function runScanner() {
   scannerTbody.innerHTML = '';
-  const f = scannerFilter.value.trim().toUpperCase();
+  const f    = scannerFilter.value.trim().toUpperCase();
   const list = f
     ? symbols.filter(s => s.includes(f))
     : symbols.slice(0,20);
@@ -315,7 +325,7 @@ async function runScanner() {
       <td style="color:${sg===true?'green':sg===false?'red':'gray'}">
         ${sg===true?'Buy Signal confirmed':sg===false?'Sell Signal confirmed':'Wait for signal'}
       </td>
-      <td>${typeof h1T==='number' ? h1T.toFixed(4) : h1T}</td>`;
+      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>`;
     scannerTbody.append(tr);
   }
 }
@@ -341,32 +351,32 @@ async function updateDashboard() {
 }
 
 // —————————————————————————————————————————————————————————————————————
-// 11) Initialize on load
+// 11) Initialize immediately
 // —————————————————————————————————————————————————————————————————————
-document.addEventListener('DOMContentLoaded', () => {
-  ['scannerTempDaily','scannerTempHourly'].forEach(id=>{
+(function init() {
+  ['scannerTempDaily','scannerTempHourly'].forEach(id => {
     if (!document.getElementById(id)) {
-      const d=document.createElement('div');
-      d.id=id; d.style.display='none';
+      const d = document.createElement('div');
+      d.id = id;
+      d.style.display = 'none';
       document.body.appendChild(d);
     }
   });
 
-  cryptoSymbols.forEach(s=>{
+  // populate dropdown: cryptos first
+  cryptoSymbols.forEach(s => {
     symbolSelect.append(new Option(s.replace('USDT','/USDT'), s));
   });
+  // separator + FX pairs
   symbolSelect.append(new Option('────────── Forex Pairs ──────────','',false,false));
-  forexSymbols.forEach(s=>{
-    symbolSelect.append(new Option(
-      s.slice(0,3)+'/'+s.slice(3),
-      s
-    ));
+  forexSymbols.forEach(s => {
+    symbolSelect.append(new Option(s.slice(0,3)+'/'+s.slice(3), s));
   });
 
   symbolSelect.value = cryptoSymbols[0];
   symbolSelect.addEventListener('change', updateDashboard);
-  aiBtn.addEventListener('click', generateAISummary);
+  aiBtn.addEventListener('click',   generateAISummary);
   scannerFilter.addEventListener('input', runScanner);
 
   updateDashboard();
-});
+})();
