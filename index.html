@@ -1,213 +1,165 @@
-// main.js
-
-// 1) Top‑10 USDT trading pairs
-const symbols = [
-  'BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT',
-  'SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'
-];
-
-// 2) DOM refs
-const symbolSelect = document.getElementById('symbolSelect');
-const dailyTitle   = document.getElementById('dailyTitle');
-const hourlyTitle  = document.getElementById('hourlyTitle');
-const aiBtn        = document.getElementById('aiBtn');
-const outPre       = document.getElementById('out');
-
-// 3) Store each chart’s chart, series & raw data here
-const charts = {};
-
-// 4) Populate the symbol dropdown
-symbols.forEach(sym => {
-  const opt = document.createElement('option');
-  opt.value = sym;
-  opt.text  = sym.replace('USDT','/USDT');
-  symbolSelect.appendChild(opt);
-});
-
-// 5) Helper: EMA for price
-function ema(arr, period) {
-  const k = 2 / (period + 1);
-  const out = [];
-  let prev;
-  for (let i = 0; i < arr.length; i++) {
-    if (i === period - 1) {
-      const sum = arr.slice(0, period).reduce((a,b)=>a+b,0);
-      prev = sum/period;
-      out[i] = prev;
-    } else if (i >= period) {
-      prev = arr[i]*k + prev*(1-k);
-      out[i] = prev;
-    } else out[i] = null;
-  }
-  return out;
-}
-
-// 5b) Helper: SMA for array
-function sma(arr, period) {
-  const out = [];
-  for (let i = 0; i < arr.length; i++) {
-    if (i < period - 1) { out.push(null); continue; }
-    let sum = 0;
-    for (let j = i - period + 1; j <= i; j++) sum += arr[j];
-    out.push(sum/period);
-  }
-  return out;
-}
-
-// 5c) Helper: RSI
-function rsi(arr, period) {
-  const gains = [], losses = [], out = [];
-  for (let i = 1; i < arr.length; i++) {
-    const diff = arr[i] - arr[i-1];
-    gains.push(diff>0?diff:0);
-    losses.push(diff<0?-diff:0);
-  }
-  let avgGain = gains.slice(0,period).reduce((a,b)=>a+b,0)/period;
-  let avgLoss = losses.slice(0,period).reduce((a,b)=>a+b,0)/period;
-  out[period] = 100 - (100/(1 + avgGain/avgLoss));
-  for (let i = period+1; i < arr.length; i++) {
-    avgGain = (avgGain*(period-1) + gains[i-1]) / period;
-    avgLoss = (avgLoss*(period-1) + losses[i-1]) / period;
-    out[i] = 100 - 100/(1 + avgGain/avgLoss);
-  }
-  return out;
-}
-
-// 6) AI summary
-async function generateAISummary() {
-  const sym = symbolSelect.value;
-  outPre.textContent = `Loading AI summary for ${sym}…`;
-  try {
-    const resp = await axios.get('/api/ai',{ params:{ symbol:sym } });
-    const summary = typeof resp.data==='string'?resp.data:
-      resp.data.summary?resp.data.summary:
-      resp.data.text?resp.data.text:
-      JSON.stringify(resp.data,null,2);
-    outPre.textContent = summary;
-  } catch(e) {
-    console.error(e);
-    outPre.textContent = `❌ AI error: ${e.message}`;
-  }
-}
-aiBtn.addEventListener('click', generateAISummary);
-
-// 7) Update
-async function updateDashboard() {
-  const sym = symbolSelect.value;
-  dailyTitle.textContent  = `${sym} — Daily`;
-  hourlyTitle.textContent = `${sym} — 1 Hour`;
-  await fetchAndDraw(sym,'daily','1d','dailyChart');
-  await fetchAndDraw(sym,'hourly','1h','hourlyChart');
-  drawFibsOnChart('dailyChart');
-  drawFibsOnChart('hourlyChart');
-  const bullishDaily = drawEMAandProbability('dailyChart');
-  drawRSIandSignal('hourlyChart', bullishDaily);
-  await generateAISummary();
-}
-symbolSelect.addEventListener('change',updateDashboard);
-updateDashboard();
-
-// fetch + draw
-async function fetchAndDraw(symbol,type,interval,containerId) {
-  const limit=1000;
-  const resp=await axios.get('https://api.binance.com/api/v3/klines',{ params:{symbol,interval,limit} });
-  const data=resp.data.map(k=>({time:k[0]/1000, open:+k[1], high:+k[2], low:+k[3], close:+k[4]}));
-  const container=document.getElementById(containerId);
-  container.innerHTML='';
-  const chart=LightweightCharts.createChart(container,{ layout:{textColor:'#000'}, rightPriceScale:{scaleMargins:{top:0.3,bottom:0.1}}, timeScale:{timeVisible:true,secondsVisible:false} });
-  const series=chart.addCandlestickSeries(); series.setData(data);
-  charts[containerId]={chart,series,data};
-  if(containerId==='dailyChart'){
-    const closes=data.map(d=>d.close);
-    const emaArr=ema(closes,45);
-    const emaData=data.map((d,i)=>({time:d.time,value:emaArr[i]})).filter(pt=>pt.value!=null);
-    const emaS=chart.addLineSeries({color:'orange',lineWidth:2}); emaS.setData(emaData);
-    charts[containerId].emaArr=emaArr;
-  }
-}
-
-// fibs auto-zoom
-function drawFibsOnChart(containerId) {
-  const e=charts[containerId]; if(!e) return;
-  const{chart,series,data}=e;
-  const opens=data.map(d=>d.open), highs=data.map(d=>d.high), lows=data.map(d=>d.low);
-  const ma50=sma(opens,50), ma200=sma(opens,200);
-  let lastGC=-1,lastDC=-1;
-  for(let i=1;i<opens.length;i++){ if(ma50[i]>ma200[i]&&ma50[i-1]<=ma200[i-1]) lastGC=i; if(ma50[i]<ma200[i]&&ma50[i-1]>=ma200[i-1]) lastDC=i; }
-  const isUp=lastGC>lastDC, idx=isUp?lastGC:lastDC; if(idx<0)return;
-  let pre=idx,start=(isUp?lastDC:lastGC)>0?(isUp?lastDC:lastGC):0;
-  for(let i=start;i<idx;i++){ if(isUp? lows[i]<lows[pre] : highs[i]>highs[pre]) pre=i; }
-  let post=-1;
-  for(let i=idx+2;i<data.length-2;i++){ const fh=highs[i]>highs[i-1]&&highs[i]>highs[i-2]&&highs[i]>highs[i+1]&&highs[i]>highs[i+2]; const fl=lows[i]<lows[i-1]&&lows[i]<lows[i-2]&&lows[i]<lows[i+1]&&lows[i]<lows[i+2]; if(isUp&&fh){post=i;break;} if(!isUp&&fl){post=i;break;} } if(post<0)return;
-  const preP=isUp?lows[pre]:highs[pre], postP=isUp?highs[post]:lows[post], r=Math.abs(postP-preP);
-  const retrace=isUp?postP-r*0.618:postP+r*0.618; const ext127=isUp?postP+r*0.27:postP-r*0.27; const ext618=isUp?postP+r*0.618:postP-r*0.618; const ext2618=isUp?postP+r*1.618:postP-r*1.618;
-  let t=false,m=false; for(let i=post+1;i<data.length;i++){ if(isUp? lows[i]<=retrace: highs[i]>=retrace) t=true; if(isUp? highs[i]>=ext127: lows[i]<=ext127) m=true; }
-  const level = t?ext618:(!t&&!m?ext127:ext2618);
-  series.createPriceLine({price:level,color:'darkgreen',lineWidth:2,lineStyle:0,axisLabelVisible:true});
-  if(!e.zoomSeries){ const zs=chart.addLineSeries({color:'rgba(0,0,0,0)',lineWidth:0}); e.zoomSeries=zs; }
-  e.zoomSeries.setData([{time:data[0].time,value:level},{time:data[data.length-1].time,value:level}]);
-}
-
-// EMA & probability; returns bullishDaily boolean
-function drawEMAandProbability(containerId) {
-  const e=charts[containerId]; if(!e||!e.emaArr) return false;
-  const {chart,data,emaArr} = e;
-  const lastClose=data[data.length-1].close; const lastE=emaArr[emaArr.length-1];
-  const bull= lastClose>lastE;
-  // overlay inside chart
-  const id=`${containerId}-prob`;
-  let div=document.getElementById(id);
-  if(!div){ div=document.createElement('div'); div.id=id; div.style.position='absolute'; div.style.top='8px'; div.style.left='8px'; div.style.zIndex='20'; div.style.fontSize='16px'; div.style.fontWeight='bold'; div.style.whiteSpace='pre'; div.style.pointerEvents='none'; document.getElementById(containerId).appendChild(div); }
-  div.style.color=bull?'green':'red'; div.textContent=`${bull?'▲':'▼'}\nProbability - ${bull?'Bullish':'Bearish'}`;
-  return bull;
-}
-
-// RSI & signal on H1
-function drawRSIandSignal(containerId, bullishDaily) {
-  if (!bullishDaily) bullishDaily = false;
-  const e = charts[containerId]; if (!e) return;
-  const { data } = e;
-  // Calculate RSI(13)
-  const closes = data.map(d => d.close);
-  const rsiArr = rsi(closes, 13);
-  // Calculate SMA(14) of RSI
-  const rsiValid = rsiArr.filter(v => v !== null);
-  const rsiMA = sma(rsiValid, 14);
-  const lastIdx = rsiArr.length - 1;
-  const lastR = rsiArr[lastIdx];
-  const lastMA = rsiMA[rsiMA.length - 1];
-  // Determine signal text
-  let signalText, color;
-  if (bullishDaily) {
-    if (lastR < 50 && lastR > lastMA) {
-      signalText = 'Buy Signal confirmed'; color = 'green';
-    } else {
-      signalText = 'Wait for Buy Signal'; color = 'gray';
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Liquidity‑Cycle Dashboard</title>
+  <link rel="icon" href="/favicon.png" />
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      font-size: 22px;
+      margin: 2rem;
     }
-  } else {
-    if (lastR > 50 && lastR < lastMA) {
-      signalText = 'Sell Signal confirmed'; color = 'red';
-    } else {
-      signalText = 'Wait for Sell Signal'; color = 'gray';
+    h1 { margin-bottom: 1rem; font-size: 32px; }
+    h2 { margin-top: 1rem; font-size: 26px; }
+    button {
+      margin-bottom: 1rem;
+      padding: 0.75rem 1.5rem;
+      font-size: 20px;
+      cursor: pointer;
+      border: none;
+      background-color: #1976d2;
+      color: white;
+      border-radius: 5px;
     }
-  }
-  // Overlay on H1 chart upper-left
-  const overlayId = containerId + '-rsi-signal';
-  let div = document.getElementById(overlayId);
-  if (!div) {
-    div = document.createElement('div');
-    div.id = overlayId;
-    div.style.position      = 'absolute';
-    div.style.top           = '8px';
-    div.style.left          = '8px';
-    div.style.zIndex        = '20';
-    div.style.fontSize      = '16px';
-    div.style.fontWeight    = 'bold';
-    div.style.whiteSpace    = 'pre';
-    div.style.pointerEvents = 'none';
-    document.getElementById(containerId).appendChild(div);
-  }
-  div.style.color = color;
-  div.textContent = `RSI: ${lastR.toFixed(2)}
-${signalText}`;
-}
+    pre {
+      white-space: pre-wrap;
+      background: #f6f6f6;
+      padding: 1rem;
+      font-size: 20px;
+      line-height: 1.5;
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 0.5rem;
+    }
+
+    .charts-container {
+      display: flex;
+      align-items: flex-start;
+      gap: 2rem;
+      margin-top: 1.5rem;
+    }
+    .chart-block {
+      flex: 1;
+    }
+    .chart-block > div {
+      position: relative;
+      width: 100%;
+      height: 700px;
+      margin-top: 0.5rem;
+    }
+
+    .summary-block {
+      width: 100%;
+      max-width: none;
+      margin-bottom: 1rem;
+    }
+
+    .explanation {
+      font-size: 22px;
+      line-height: 1.7;
+      max-width: 800px;
+      margin-top: 2rem;
+    }
+    .explanation ul {
+      margin-top: 0.5rem;
+      padding-left: 1.4rem;
+    }
+    .explanation li {
+      margin-bottom: 0.75rem;
+    }
+
+    /* Scanner table styling */
+    #scannerTable th, #scannerTable td {
+      border: 1px solid #ddd;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    #scannerTable th {
+      background-color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
+
+  <!-- Symbol selector -->
+  <div style="margin-bottom: 1rem;">
+    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">
+      Select Symbol:
+    </label>
+    <select id="symbolSelect" style="font-size:20px; padding:0.3rem;">
+      <!-- options populated by JS -->
+    </select>
+  </div>
+
+  <!-- AI Summary -->
+  <div class="summary-block">
+    <button id="aiBtn">AI Summary</button>
+    <pre id="out"></pre>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-container">
+    <div class="chart-block">
+      <h2 id="dailyTitle">BTCUSDT — Daily</h2>
+      <div id="dailyChart"></div>
+    </div>
+    <div class="chart-block">
+      <h2 id="hourlyTitle">BTCUSDT — 1 Hour</h2>
+      <div id="hourlyChart"></div>
+    </div>
+  </div>
+
+  <!-- Explanation -->
+  <div class="explanation">
+    <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
+    <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
+    <p>Instead of watching dozens of charts or guessing when to trade, this dashboard shows you how Bitcoin (BTCUSDT) is behaving across two key timeframes:</p>
+    <ul>
+      <li>📅 <strong>Daily chart</strong> – the big picture trend</li>
+      <li>🕐 <strong>Hourly chart</strong> – short-term moves</li>
+    </ul>
+    <p><strong>The goal?</strong><br>
+    To spot shifts in momentum and liquidity – so you trade with the market, not against it.</p>
+
+    <h4>Why It’s Called “Liquidity‑Cycle”</h4>
+    <p>In every market, price moves in cycles – from accumulation to expansion, then slowdown and reversal. These cycles are driven by liquidity (where the money is). This dashboard makes it easier to:</p>
+    <ul>
+      <li>✅ See when buyers/sellers are taking control</li>
+      <li>✅ Time entries during expansions, not chop</li>
+      <li>✅ Avoid trades when liquidity dries up</li>
+    </ul>
+
+    <h4>What’s “v0.1”?</h4>
+    <p>This is the first public version, focused only on BTC/USDT.<br>
+    Future updates will include:</p>
+    <ul>
+      <li>📊 Trend strength indicators</li>
+      <li>📈 Volume + momentum overlays</li>
+      <li>🌍 Asset switching (ETH, SPX, DXY, etc.)</li>
+      <li>🧠 AI summaries and alerts</li>
+    </ul>
+  </div>
+
+  <!-- Scanner -->
+  <h2>Scanner</h2>
+  <div id="scanner">
+    <table id="scannerTable" style="width:100%; border-collapse: collapse; margin-top: 0.5rem;">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Probability</th>
+          <th>Signal</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="/main.js"></script>
+</body>
+</html>
