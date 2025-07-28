@@ -1,71 +1,70 @@
-document.addEventListener("DOMContentLoaded", async () => {
-  console.log("✅ main.js loaded");
+import { createChart } from 'https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.esm.js';
 
-  // Import charts
-  const { createChart } = await import(
-    'https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js'
-  );
+console.log("✅ main.js loaded");
 
-  const dailyChart = createChart(document.getElementById("dailyChart"), {
-    width: 800,
-    height: 400,
-  });
-  const h1Chart = createChart(document.getElementById("hourlyChart"), {
-    width: 800,
-    height: 400,
-  });
+// --- Chart setup ---
+const dailyChart = createChart(document.getElementById("dailyChart"), {
+  width: 800,
+  height: 400,
+});
+const h1Chart = createChart(document.getElementById("hourlyChart"), {
+  width: 800,
+  height: 400,
+});
 
-  const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
-  const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
+const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
+const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
-  // Fetch Binance Candle Data
-  async function fetchBinanceData(symbol = "BTCUSDT", interval = "1d", limit = 500) {
-    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-    const res = await fetch(url);
-    const raw = await res.json();
-    return raw.map(c => ({
-      time: c[0] / 1000,
-      open: parseFloat(c[1]),
-      high: parseFloat(c[2]),
-      low: parseFloat(c[3]),
-      close: parseFloat(c[4]),
-    }));
+// --- Fetch Binance Data ---
+async function fetchBinanceData(symbol = "BTCUSDT", interval = "1d", limit = 500) {
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const res = await fetch(url);
+  const raw = await res.json();
+  return raw.map(c => ({
+    time: c[0] / 1000,
+    open: parseFloat(c[1]),
+    high: parseFloat(c[2]),
+    low: parseFloat(c[3]),
+    close: parseFloat(c[4]),
+  }));
+}
+
+// --- Fibonacci Overlay ---
+function plotFibonacci(chart, candles) {
+  const len = candles.length;
+  if (len < 50) return;
+
+  let swingLow = candles[len - 50];
+  let swingHigh = candles[len - 50];
+
+  for (let i = len - 50; i < len; i++) {
+    if (candles[i].low < swingLow.low) swingLow = candles[i];
+    if (candles[i].high > swingHigh.high) swingHigh = candles[i];
   }
 
-  // Plot Fibonacci Lines
-  function plotFibonacci(chart, candles) {
-    const len = candles.length;
-    if (len < 50) return;
+  const isUp = swingHigh.time > swingLow.time;
+  const base = isUp ? swingLow : swingHigh;
+  const peak = isUp ? swingHigh : swingLow;
+  const range = Math.abs(peak.close - base.close);
 
-    let swingLow = candles[len - 50];
-    let swingHigh = candles[len - 50];
+  const levels = isUp
+    ? [1.618, 2.618].map(m => peak.close + range * (m - 1))
+    : [1.618, 2.618].map(m => peak.close - range * (m - 1));
 
-    for (let i = len - 50; i < len; i++) {
-      if (candles[i].low < swingLow.low) swingLow = candles[i];
-      if (candles[i].high > swingHigh.high) swingHigh = candles[i];
-    }
-
-    const isUp = swingHigh.time > swingLow.time;
-    const base = isUp ? swingLow : swingHigh;
-    const peak = isUp ? swingHigh : swingLow;
-    const range = Math.abs(peak.close - base.close);
-    const levels = isUp
-      ? [1.618, 2.618].map(m => peak.close + range * (m - 1))
-      : [1.618, 2.618].map(m => peak.close - range * (m - 1));
-
-    levels.forEach(price => {
-      const line = chart.addLineSeries({
-        color: isUp ? "green" : "red",
-        lineWidth: 1,
-      });
-      line.setData([
-        { time: base.time, value: price },
-        { time: candles[len - 1].time, value: price },
-      ]);
+  levels.forEach(price => {
+    const line = chart.addLineSeries({
+      color: isUp ? "green" : "red",
+      lineWidth: 1,
     });
-  }
+    line.setData([
+      { time: base.time, value: price },
+      { time: candles[len - 1].time, value: price },
+    ]);
+  });
+}
 
-  // Load and Plot
+// --- Load + Render ---
+(async () => {
   const dailyData = await fetchBinanceData("BTCUSDT", "1d");
   dailySeries.setData(dailyData);
   plotFibonacci(dailyChart, dailyData);
@@ -73,11 +72,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const h1Data = await fetchBinanceData("BTCUSDT", "1h");
   h1Series.setData(h1Data);
   plotFibonacci(h1Chart, h1Data);
+})();
 
-  // AI Summary
-  document.getElementById("aiBtn").addEventListener("click", async () => {
-    const res = await fetch("https://api.llama.fi/summary?symbol=BTC");
-    const data = await res.json();
-    document.getElementById("out").textContent = data?.summary || "No summary found.";
-  });
+// --- AI Summary ---
+document.getElementById("aiBtn").addEventListener("click", async () => {
+  const res = await fetch("https://api.llama.fi/summary?symbol=BTC");
+  const data = await res.json();
+  document.getElementById("out").textContent = data?.summary || "No summary found.";
 });
