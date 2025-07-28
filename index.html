@@ -9,26 +9,60 @@
         font-family: system-ui, sans-serif;
         margin: 2rem;
       }
-      h2 {
-        margin-top: 3rem;
+
+      h1 {
+        margin-bottom: 1rem;
       }
+
+      h2 {
+        margin-top: 2rem;
+        font-size: 1.2rem;
+      }
+
+      h3, h4 {
+        margin-top: 1.5rem;
+      }
+
       #dailyChart,
-      #momentumChart,
-      #rsiChart,
       #hourlyChart {
         max-width: 800px;
         height: 400px;
         margin-top: 1rem;
       }
+
       pre {
         white-space: pre-wrap;
         background: #f6f6f6;
         padding: 0.5rem;
+        max-width: 800px;
       }
+
       button {
-        margin-top: 1rem;
+        margin-bottom: 1rem;
         padding: 0.5rem 1rem;
         font-size: 1rem;
+      }
+
+      .grid-layout {
+        display: grid;
+        grid-template-columns: 800px 1fr;
+        gap: 2rem;
+        align-items: start;
+      }
+
+      .explanation {
+        font-size: 0.95rem;
+        line-height: 1.5;
+        max-width: 600px;
+      }
+
+      .explanation ul {
+        margin-top: 0.5rem;
+        padding-left: 1.2rem;
+      }
+
+      .explanation li {
+        margin-bottom: 0.5rem;
       }
     </style>
   </head>
@@ -37,12 +71,45 @@
     <button id="aiBtn">AI Summary</button>
     <pre id="out"></pre>
 
-    <h2>BTCUSDT — Daily</h2>
-    <div id="dailyChart"></div>
-   
+    <div class="grid-layout">
+      <div>
+        <h2>BTCUSDT — Daily</h2>
+        <div id="dailyChart"></div>
 
-    <h2>BTCUSDT — 1 Hour</h2>
-    <div id="hourlyChart"></div>
+        <h2>BTCUSDT — 1 Hour</h2>
+        <div id="hourlyChart"></div>
+      </div>
+
+      <div class="explanation">
+        <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
+        <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
+        <p>Instead of watching dozens of charts or guessing when to trade, this dashboard shows you how Bitcoin (BTCUSDT) is behaving across two key timeframes:</p>
+        <ul>
+          <li>📅 <strong>Daily chart</strong> – the big picture trend</li>
+          <li>🕐 <strong>Hourly chart</strong> – short-term moves</li>
+        </ul>
+        <p><strong>The goal?</strong><br>
+        To spot shifts in momentum and liquidity – so you trade with the market, not against it.</p>
+
+        <h4>Why It’s Called “Liquidity‑Cycle”</h4>
+        <p>In every market, price moves in cycles – from accumulation to expansion, then slowdown and reversal. These cycles are driven by liquidity (where the money is). This dashboard makes it easier to:</p>
+        <ul>
+          <li>✅ See when buyers/sellers are taking control</li>
+          <li>✅ Time entries during expansions, not chop</li>
+          <li>✅ Avoid trades when liquidity dries up</li>
+        </ul>
+
+        <h4>What’s “v0.1”?</h4>
+        <p>This is the first public version, focused only on BTC/USDT.<br>
+        Future updates will include:</p>
+        <ul>
+          <li>📊 Trend strength indicators</li>
+          <li>📈 Volume + momentum overlays</li>
+          <li>🌍 Asset switching (ETH, SPX, DXY, etc.)</li>
+          <li>🧠 AI summaries and alerts</li>
+        </ul>
+      </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
