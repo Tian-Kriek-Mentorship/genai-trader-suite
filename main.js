@@ -11,11 +11,11 @@ const forexSymbols = [
 ];
 const symbols = [...cryptoSymbols, ...forexSymbols];
 
-// ForexRateAPI key
 const FX_API_KEY = '2c89d3c16785a95303f907db6b6f8488';
 
-const fxCache = {};   // { symbol: { timestamp: ms, data: [...] } }
-const charts  = {};   // { containerId: { chart, series, data, ... } }
+const fxCache       = {}; // close rates cache: { symbol: { timestamp, data:[{time,close}] } }
+const fxOHLCcache   = {}; // OHLC cache:      { symbol: { timestamp, data:[{time,open,high,low,close}] } }
+const charts        = {}; // charts store
 
 // DOM refs (script at end of body)
 const symbolSelect  = document.getElementById('symbolSelect');
@@ -27,18 +27,18 @@ const scannerFilter = document.getElementById('scannerFilter');
 const scannerTbody  = document.querySelector('#scannerTable tbody');
 
 // ――― 2) AI Summary ―――
-async function generateAISummary() {
+async function generateAISummary(){
   const sym = symbolSelect.value;
   outPre.textContent = `Loading AI summary for ${sym}…`;
   try {
-    const resp = await axios.get('/api/ai', { params:{ symbol: sym } });
+    const resp = await axios.get('/api/ai',{ params:{ symbol:sym }});
     const d = resp.data;
-    outPre.textContent = typeof d === 'string'
+    outPre.textContent = typeof d==='string'
       ? d
-      : d.summary ? d.summary
-      : d.text    ? d.text
+      : d.summary?d.summary
+      : d.text?d.text
       : JSON.stringify(d,null,2);
-  } catch (e) {
+  } catch(e){
     console.error(e);
     outPre.textContent = `❌ AI error: ${e.message}`;
   }
@@ -46,23 +46,23 @@ async function generateAISummary() {
 
 // ――― 3) Indicators: EMA, SMA, RSI ―――
 function ema(arr,p){
-  const k=2/(p+1), out=[],n=arr.length; let prev;
+  const k=2/(p+1),out=[],n=arr.length; let prev;
   for(let i=0;i<n;i++){
     if(i===p-1){
-      prev=arr.slice(0,p).reduce((a,b)=>a+b,0)/p;
-      out[i]=prev;
+      prev = arr.slice(0,p).reduce((a,b)=>a+b,0)/p;
+      out[i] = prev;
     } else if(i>=p){
-      prev=arr[i]*k+prev*(1-k);
-      out[i]=prev;
-    } else out[i]=null;
+      prev = arr[i]*k + prev*(1-k);
+      out[i] = prev;
+    } else out[i] = null;
   }
   return out;
 }
 function sma(arr,p){
   const out=[]; for(let i=0;i<arr.length;i++){
     if(i<p-1){ out.push(null); continue; }
-    let s=0; for(let j=i-p+1;j<=i;j++) s+=arr[j];
-    out.push(s/p);
+    let sum=0; for(let j=i-p+1;j<=i;j++) sum+=arr[j];
+    out.push(sum/p);
   }
   return out;
 }
@@ -84,16 +84,16 @@ function rsi(arr,p){
   return out;
 }
 
-// ――― 4) Fetch FX daily close series (cached 1h) ―――
-async function getFXData(symbol){
+// ――― 4) Fetch FX close series (cached 1h) ―――
+async function getFXCloseSeries(symbol){
   const now=Date.now();
-  if(fxCache[symbol] && now-fxCache[symbol].timestamp<3600*1000){
+  if(fxCache[symbol] && now-fxCache[symbol].timestamp<3600e3){
     return fxCache[symbol].data;
   }
   try{
     const toDate=new Date().toISOString().slice(0,10);
-    const fromDate=new Date(now-365*24*3600*1000).toISOString().slice(0,10);
-    const base=symbol.slice(0,3), curr=symbol.slice(3);
+    const fromDate=new Date(now-365*24*3600e3).toISOString().slice(0,10);
+    const base=symbol.slice(0,3),curr=symbol.slice(3);
     const url=`https://api.forexrateapi.com/v1/timeframe`+
               `?api_key=${FX_API_KEY}`+
               `&start_date=${fromDate}`+
@@ -102,25 +102,60 @@ async function getFXData(symbol){
               `&currencies=${curr}`;
     const resp=await axios.get(url);
     if(!resp.data||!resp.data.rates){
-      console.error(`ForexRateAPI error for ${symbol}`,resp.data);
+      console.error(`FXRateAPI rates error for ${symbol}`,resp.data);
       return [];
     }
     const arr=Object.entries(resp.data.rates)
       .map(([day,o])=>({
-        time:  Math.floor(new Date(day).getTime()/1000),
+        time: Math.floor(new Date(day).getTime()/1000),
         close: o[curr]
       }))
       .sort((a,b)=>a.time-b.time);
-    fxCache[symbol]={ timestamp: now, data: arr };
+    fxCache[symbol]={ timestamp:now, data:arr };
     return arr;
-  }catch(e){
-    console.error(`FX fetch error for ${symbol}`,e);
+  } catch(e){
+    console.error(`FX fetch close error for ${symbol}`,e);
     return [];
   }
 }
 
-// ――― 5) fetchAndDraw: crypto vs FX (approximate FX OHLC) ―――
-async function fetchAndDraw(symbol,_,interval,cid){
+// ――― 5) Fetch FX OHLC series (cached 1h, last 100 days) ―――
+async function getFXOHLCSeries(symbol){
+  const now=Date.now();
+  if(fxOHLCcache[symbol] && now-fxOHLCcache[symbol].timestamp<3600e3){
+    return fxOHLCcache[symbol].data;
+  }
+  const closes = await getFXCloseSeries(symbol);
+  const last100 = closes.slice(-100);
+  const base=symbol.slice(0,3), curr=symbol.slice(3);
+  const ohlc=[];
+  for(const {time} of last100){
+    const day=new Date(time*1000).toISOString().slice(0,10);
+    try{
+      const resp=await axios.get(
+        'https://api.forexrateapi.com/v1/ohlc',
+        { params:{
+            api_key: FX_API_KEY,
+            base,
+            currency: curr,
+            date: day
+          }
+        }
+      );
+      if(resp.data && resp.data.rate){
+        const r=resp.data.rate;
+        ohlc.push({ time, open:r.open, high:r.high, low:r.low, close:r.close });
+      }
+    }catch(e){
+      console.error(`FX OHLC error ${symbol} ${day}`,e);
+    }
+  }
+  fxOHLCcache[symbol]={ timestamp:now, data:ohlc };
+  return ohlc;
+}
+
+// ――― 6) fetchAndDraw: crypto vs FX ―――
+async function fetchAndDraw(symbol,_,interval,containerId){
   let data=[];
   if(symbol.endsWith('USDT')){
     const resp=await axios.get(
@@ -128,27 +163,16 @@ async function fetchAndDraw(symbol,_,interval,cid){
       { params:{ symbol, interval, limit:1000 } }
     );
     data=resp.data.map(k=>({
-      time: k[0]/1000,
+      time:k[0]/1000,
       open:+k[1], high:+k[2],
       low:+k[3],  close:+k[4]
     }));
   } else {
-    const closes=await getFXData(symbol);
-    // build OHLC: open=prev close, high/low between open/close
-    data=closes.map((d,i)=>{
-      const o=i?closes[i-1].close:d.close;
-      const c=d.close;
-      return {
-        time: d.time,
-        open: o,
-        high: Math.max(o,c),
-        low:  Math.min(o,c),
-        close:c
-      };
-    });
+    // use true OHLC series
+    data = await getFXOHLCSeries(symbol);
   }
 
-  const container=document.getElementById(cid);
+  const container=document.getElementById(containerId);
   container.innerHTML='';
   const chart=LightweightCharts.createChart(container,{
     layout:{ textColor:'#000' },
@@ -157,26 +181,24 @@ async function fetchAndDraw(symbol,_,interval,cid){
   });
   const series=chart.addCandlestickSeries();
   series.setData(data);
-  charts[cid]={ chart, series, data };
+  charts[containerId]={ chart, series, data };
 
   if(interval==='1d'){
-    const closesArr=data.map(d=>d.close);
-    const emaArr=ema(closesArr,45);
-    const ed=data
-      .map((d,i)=>({ time:d.time, value:emaArr[i] }))
-      .filter(p=>p.value!=null);
+    const closes=data.map(d=>d.close);
+    const arr=ema(closes,45);
+    const ed=data.map((d,i)=>({ time:d.time, value:arr[i] }))
+                 .filter(p=>p.value!=null);
     const ls=chart.addLineSeries({ color:'orange', lineWidth:2 });
     ls.setData(ed);
-    charts[cid].emaArr=emaArr;
+    charts[containerId].emaArr=arr;
   }
 }
 
-// ――― 6) drawFibsOnChart + auto‑zoom ―――
+// ――― 7) drawFibsOnChart + auto‑zoom ―――
 function drawFibsOnChart(cid){
   const e=charts[cid];
   if(!e) return;
   const { chart, series, data } = e;
-
   const o=data.map(d=>d.open),
         h=data.map(d=>d.high),
         l=data.map(d=>d.low);
@@ -188,22 +210,18 @@ function drawFibsOnChart(cid){
   }
   const up=gc>dc, idx=up?gc:dc;
   if(idx<0) return;
-
-  let pre=idx,
-      start=((up?dc:gc)>0?(up?dc:gc):0);
+  let pre=idx, start=((up?dc:gc)>0?(up?dc:gc):0);
   for(let i=start;i<idx;i++){
     if(up?l[i]<l[pre]:h[i]>h[pre]) pre=i;
   }
-
   let post=-1;
   for(let i=idx+2;i<data.length-2;i++){
-    const fh=h[i]>h[i-1]&&h[i]>h[i-2]&&h[i]>h[i+1]&&h[i]>h[i+2];
-    const fl=l[i]<l[i-1]&&l[i]<l[i-2]&&l[i]<l[i+1]&&l[i]<l[i+2];
+    const fh=h[i]>h[i-1]&&h[i]>h[i-2]&&h[i]>h[i+1]&&h[i]>h[i+2],
+          fl=l[i]<l[i-1]&&l[i]<l[i-2]&&l[i]<l[i+1]&&l[i]<l[i+2];
     if(up&&fh){ post=i; break; }
     if(!up&&fl){ post=i; break; }
   }
   if(post<0) return;
-
   const preP=up?l[pre]:h[pre],
         postP=up?h[post]:l[post],
         r=Math.abs(postP-preP);
@@ -211,14 +229,12 @@ function drawFibsOnChart(cid){
         e127=up?postP+r*0.27:postP-r*0.27,
         e618=up?postP+r*0.618:postP-r*0.618,
         e2618=up?postP+r*1.618:postP-r*1.618;
-
   let touched=false, moved127=false;
   for(let i=post+1;i<data.length;i++){
     if(up){ if(l[i]<=retr)touched=true; if(h[i]>=e127)moved127=true; }
-    else { if(h[i]>=retr)touched=true; if(l[i]<=e127)moved127=true; }
+    else  { if(h[i]>=retr)touched=true; if(l[i]<=e127)moved127=true; }
   }
   const level=touched?e618:(!touched&&!moved127?e127:e2618);
-
   series.createPriceLine({
     price:level,
     color:'darkgreen',
@@ -226,7 +242,6 @@ function drawFibsOnChart(cid){
     axisLabelVisible:true
   });
   e.fibTarget=level;
-
   if(!e.zoomSeries){
     e.zoomSeries=chart.addLineSeries({ color:'rgba(0,0,0,0)', lineWidth:0 });
   }
@@ -236,12 +251,12 @@ function drawFibsOnChart(cid){
   ]);
 }
 
-// ――― 7) EMA & Probability overlay ―――
+// ――― 8) EMA & Probability overlay ―――
 function drawEMAandProbability(cid){
   const e=charts[cid];
   if(!e||!e.emaArr) return false;
-  const lastC=e.data.slice(-1)[0].close,
-        lastE=e.emaArr.slice(-1)[0],
+  const lastC=e.data[e.data.length-1].close,
+        lastE=e.emaArr[e.emaArr.length-1],
         bull=lastC>lastE,
         id=`${cid}-prob`;
   let div=document.getElementById(id);
@@ -249,9 +264,9 @@ function drawEMAandProbability(cid){
     div=document.createElement('div');
     div.id=id;
     Object.assign(div.style,{
-      position:'absolute', top:'8px', left:'8px',
-      zIndex:'20', fontSize:'16px', fontWeight:'bold',
-      whiteSpace:'pre', pointerEvents:'none'
+      position:'absolute',top:'8px',left:'8px',
+      zIndex:'20',fontSize:'16px',fontWeight:'bold',
+      whiteSpace:'pre',pointerEvents:'none'
     });
     document.getElementById(cid).appendChild(div);
   }
@@ -260,12 +275,12 @@ function drawEMAandProbability(cid){
   return bull;
 }
 
-// ――― 8) RSI & H1 Signal overlay ―――
+// ――― 9) RSI & H1 Signal overlay ―――
 function drawRSIandSignal(cid,bullish){
   const e=charts[cid];
   if(!e) return null;
   const arr=rsi(e.data.map(d=>d.close),13),
-        val=arr.slice(-1)[0],
+        val=arr[arr.length-1],
         valid=arr.filter(v=>v!=null),
         maVal=sma(valid,14).slice(-1)[0];
   let txt,clr,rtn=null;
@@ -273,7 +288,7 @@ function drawRSIandSignal(cid,bullish){
     if(val<50&&val>maVal){ txt='Buy Signal confirmed'; clr='green'; rtn=true; }
     else                  { txt='Wait for Buy Signal';    clr='gray';  }
   } else {
-    if(val>50&&val<maVal){ txt='Sell Signal confirmed';clr='red'; rtn=false; }
+    if(val>50&&val<maVal){ txt='Sell Signal confirmed';clr='red';   rtn=false; }
     else                 { txt='Wait for Sell Signal';  clr='gray';  }
   }
   const id=`${cid}-rsi`;
@@ -282,9 +297,9 @@ function drawRSIandSignal(cid,bullish){
     div=document.createElement('div');
     div.id=id;
     Object.assign(div.style,{
-      position:'absolute', top:'8px', left:'8px',
-      zIndex:'20', fontSize:'16px', fontWeight:'bold',
-      whiteSpace:'pre', pointerEvents:'none'
+      position:'absolute',top:'8px',left:'8px',
+      zIndex:'20',fontSize:'16px',fontWeight:'bold',
+      whiteSpace:'pre',pointerEvents:'none'
     });
     document.getElementById(cid).appendChild(div);
   }
@@ -293,13 +308,11 @@ function drawRSIandSignal(cid,bullish){
   return rtn;
 }
 
-// ――― 9) Scanner: only first 20 aligned signals ―――
+// ――― 10) Scanner: first 20 with signals only ―――
 async function runScanner(){
   scannerTbody.innerHTML='';
   const filter=scannerFilter.value.trim().toUpperCase();
-  const list=filter
-    ? symbols.filter(s=>s.includes(filter))
-    : symbols;
+  const list=filter?symbols.filter(s=>s.includes(filter)):symbols;
   let count=0;
   for(const sym of list){
     if(count>=20) break;
@@ -309,7 +322,7 @@ async function runScanner(){
     drawFibsOnChart('scannerTempHourly');
     const h1T=charts['scannerTempHourly'].fibTarget??'—';
     const sg=drawRSIandSignal('scannerTempHourly',pb);
-    if(sg===null) continue;  // skip "wait for signal"
+    if(sg===null) continue;
     const tr=document.createElement('tr');
     tr.innerHTML=`
       <td>${sym}</td>
@@ -323,7 +336,7 @@ async function runScanner(){
   }
 }
 
-// ――― 10) updateDashboard ―――
+// ――― 11) updateDashboard ―――
 async function updateDashboard(){
   const sym=symbolSelect.value;
   dailyTitle.textContent=`${sym} — Daily`;
@@ -338,7 +351,7 @@ async function updateDashboard(){
   await runScanner();
 }
 
-// ――― 11) Initialization ―――
+// ――― 12) Initialization ―――
 (function init(){
   ['scannerTempDaily','scannerTempHourly'].forEach(id=>{
     if(!document.getElementById(id)){
