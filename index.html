@@ -45,11 +45,10 @@
     }
     .chart-block > div {
       width: 100%;
-      height: 400px;
+      height: 700px;
       margin-top: 0.5rem;
     }
 
-    /* summary wrapper spans full charts width */
     .summary-block {
       width: 100%;
       max-width: none;
@@ -94,11 +93,12 @@
   <div class="charts-container">
     <div class="chart-block">
       <h2 id="dailyTitle">BTCUSDT — Daily</h2>
-      <div id="dailyChart"></div>
+      <!-- inline position:relative for overlay -->
+      <div id="dailyChart" style="position: relative;"></div>
     </div>
     <div class="chart-block">
       <h2 id="hourlyTitle">BTCUSDT — 1 Hour</h2>
-      <div id="hourlyChart"></div>
+      <div id="hourlyChart" style="position: relative;"></div>
     </div>
   </div>
 
