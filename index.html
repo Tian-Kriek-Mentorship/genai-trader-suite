@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,6 +90,16 @@
 <body>
   <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
 
+  <!-- Symbol selector -->
+  <div style="margin-bottom: 1.5rem;">
+    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">
+      Select Symbol:
+    </label>
+    <select id="symbolSelect" style="font-size:20px; padding:0.3rem;">
+      <!-- options populated by JS -->
+    </select>
+  </div>
+
   <div class="top-layout">
     <div class="summary-block">
       <button id="aiBtn">AI Summary</button>
@@ -126,10 +137,10 @@
     </div>
   </div>
 
-  <h2>BTCUSDT — Daily</h2>
+  <h2 id="dailyTitle">BTCUSDT — Daily</h2>
   <div id="dailyChart"></div>
 
-  <h2>BTCUSDT — 1 Hour</h2>
+  <h2 id="hourlyTitle">BTCUSDT — 1 Hour</h2>
   <div id="hourlyChart"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
