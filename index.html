@@ -3,58 +3,68 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>GenAI Trader Suite</title>
-  <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
+  <title>IG Chart Viewer</title>
+
+  <!-- Lightweight Charts -->
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+
   <style>
     body {
+      margin: 0;
+      padding: 0;
+      background-color: white; /* ✅ Page background */
       font-family: Arial, sans-serif;
-      padding: 20px;
-      
-      background-color: white; /* Fix black background */
-      color: #fff;
+      color: black;
+    }
+
+    #controls {
+      padding: 1rem;
+      background: #f0f0f0;
+      border-bottom: 1px solid #ccc;
+    }
+
+    #chartWrap {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      padding: 1rem;
+    }
+
+    #dailyChart,
+    #hourlyChart {
+      width: 100%;
+      height: 400px;
+      background-color: white; /* ✅ Canvas background */
     }
 
     select {
-      padding: 8px;
-      font-size: 16px;
-      margin-bottom: 20px;
-    }
-
-    .chart-container {
-      margin-bottom: 40px;
-      background-color: white; /* Make sure chart canvas has a white background */
-    }
-
-    #dailyChart, #hourlyChart {
-      width: 100%;
-      max-width: 900px;
-      height: 400px;
-      margin: 0 auto;
+      font-size: 1rem;
+      padding: 0.5rem;
     }
   </style>
 </head>
 <body>
-  <h1>📈 GenAI Trader Suite</h1>
-
-  <!-- Symbol selector -->
-  <select id="symbolSelect">
-    <option value="CS.D.BITCOIN.CFD.IP">BTC/USD</option>
-    <option value="CS.D.EURUSD.CFD.IP">EUR/USD</option>
-    <option value="IX.D.NVDA.IFD.IP">NVDA</option>
-  </select>
-
-  <!-- Chart containers -->
-  <div class="chart-container">
-    <h2>Daily Chart</h2>
-    <div id="dailyChart"></div>
+  <div id="controls">
+    <label for="symbolSelect">Select Market:</label>
+    <select id="symbolSelect">
+      <option value="CS.D.BITCOIN.CFD.IP">BTC/USD</option>
+      <option value="CS.D.EURUSD.CFD.IP">EUR/USD</option>
+      <option value="IX.D.NVDA.IFD.IP">NVDA</option>
+    </select>
   </div>
 
-  <div class="chart-container">
-    <h2>Hourly Chart</h2>
-    <div id="hourlyChart"></div>
+  <div id="chartWrap">
+    <div>
+      <h2>Daily Chart</h2>
+      <div id="dailyChart"></div>
+    </div>
+    <div>
+      <h2>Hourly Chart</h2>
+      <div id="hourlyChart"></div>
+    </div>
   </div>
 
-  <!-- Script -->
+  <!-- Your main logic -->
   <script type="module" src="/main.js"></script>
 </body>
 </html>
