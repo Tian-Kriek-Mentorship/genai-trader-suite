@@ -12,8 +12,9 @@ const h1Chart = createChart(document.getElementById("hourlyChart"), {
   height: 400,
 });
 
-const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
-const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
+const dailySeries = dailyChart.addCandlestickSeries({ upColor: "#26a69a", downColor: "#ef5350", borderVisible: false });
+const h1Series = h1Chart.addCandlestickSeries({ upColor: "#26a69a", downColor: "#ef5350", borderVisible: false });
+
 
 // --- Fetch Binance Data ---
 async function fetchBinanceData(symbol = "BTCUSDT", interval = "1d", limit = 500) {
