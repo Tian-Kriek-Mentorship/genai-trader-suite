@@ -50,29 +50,26 @@ async function updateDashboard() {
   dailyTitle.textContent  = `${sym} — Daily`;
   hourlyTitle.textContent = `${sym} — 1 Hour`;
 
-  // 6a) Fetch & draw candles (fills charts[...] entries)
-  await fetchAndDraw(sym, 'daily',  '1d', 'dailyChart');
-  await fetchAndDraw(sym, 'hourly', '1h', 'hourlyChart');
+  // draw both charts (fills charts[...] entries)
+  await fetchAndDraw(sym,'daily','1d','dailyChart');
+  await fetchAndDraw(sym,'hourly','1h','hourlyChart');
 
-  // 6b) Compute & plot your fib target on each
+  // now draw fibs on each
   drawFibsOnChart('dailyChart');
   drawFibsOnChart('hourlyChart');
 
-  // 6c) Then fire the AI summary
+  // and finally AI summary
   await generateAISummary();
 }
 symbolSelect.addEventListener('change', updateDashboard);
 updateDashboard();
-
 
 // ─── fetch + draw candlesticks ────────────────────────────────────
 async function fetchAndDraw(symbol, type, interval, containerId) {
   // fetch last 1 000 bars so we catch any cross
   const limit = 1000;
   const resp = await axios.get(
-    'https://api.binance.com/api/v3/klines', {
-      params: { symbol, interval, limit }
-    }
+    'https://api.binance.com/api/v3/klines',{ params: { symbol, interval, limit } }
   );
 
   // transform
@@ -99,16 +96,11 @@ async function fetchAndDraw(symbol, type, interval, containerId) {
   charts[containerId] = { series, data };
 }
 
-
 // ─── draw your Fibonacci target ────────────────────────────────────
 function drawFibsOnChart(containerId) {
   const entry = charts[containerId];
-  if (!entry) {
-    console.warn(`[Fib] no chart entry for ${containerId}`);
-    return;
-  }
+  if (!entry) return;
   const { series, data } = entry;
-  console.log(`[Fib] ${containerId}: data.length = ${data.length}`);
 
   // simple SMA helper
   const sma = (arr, period) => {
@@ -134,14 +126,9 @@ function drawFibsOnChart(containerId) {
     if (ma50[i] > ma200[i] && ma50[i - 1] <= ma200[i - 1]) lastGC = i;
     if (ma50[i] < ma200[i] && ma50[i - 1] >= ma200[i - 1]) lastDC = i;
   }
-  console.log(`[Fib] ${containerId}: lastGC=${lastGC}, lastDC=${lastDC}`);
-
   const isUp     = lastGC > lastDC;
   const crossIdx = isUp ? lastGC : lastDC;
-  if (crossIdx < 0) {
-    console.warn(`[Fib] ${containerId}: no SMA cross found → skipping fib`);
-    return;
-  }
+  if (crossIdx < 0) return;
 
   // find pre‑swing
   let preIdx = crossIdx;
@@ -152,7 +139,6 @@ function drawFibsOnChart(containerId) {
       preIdx = i;
     }
   }
-  console.log(`[Fib] ${containerId}: crossIdx=${crossIdx}, preIdx=${preIdx}`);
 
   // find first fractal after the cross
   let postIdx = -1;
@@ -168,23 +154,19 @@ function drawFibsOnChart(containerId) {
     if (isUp   && isFractHigh) { postIdx = i; break; }
     if (!isUp && isFractLow ) { postIdx = i; break; }
   }
-  if (postIdx < 0) {
-    console.warn(`[Fib] ${containerId}: no fractal found → skipping fib`);
-    return;
-  }
-  console.log(`[Fib] ${containerId}: postIdx=${postIdx}`);
+  if (postIdx < 0) return;
 
-  // calculate levels
   const preP  = isUp ? lows[preIdx]  : highs[preIdx];
   const postP = isUp ? highs[postIdx] : lows[postIdx];
   const range = Math.abs(postP - preP);
 
+  // levels
   const retrace = isUp ? postP - range * 0.618 : postP + range * 0.618;
   const ext127  = isUp ? postP + range * 0.27  : postP - range * 0.27;
   const ext1618 = isUp ? postP + range * 0.618 : postP - range * 0.618;
   const ext2618 = isUp ? postP + range * 1.618 : postP - range * 1.618;
 
-  // scan forward for hits
+  // scan forward
   let touchedRetrace = false, movedExt127 = false;
   for (let i = postIdx + 1; i < data.length; i++) {
     if (isUp) {
@@ -195,29 +177,21 @@ function drawFibsOnChart(containerId) {
       if (lows[i]  <= ext127)    movedExt127   = true;
     }
   }
-  console.log(
-    `[Fib] ${containerId}: touchedRetrace=${touchedRetrace}, ` +
-    `movedExt127=${movedExt127}`
-  );
 
-  // pick which extension to draw
-  let level, color;
-  if      (touchedRetrace)   { level = ext1618; color = 'lime';      }
-  else if (!touchedRetrace 
-         && !movedExt127 )   { level = ext127;  color = 'orangered'; }
-  else                       { level = ext2618; color = 'deeppink';  }
+  // pick level (always dark green)
+  const level = touchedRetrace   ? ext1618
+               : (!touchedRetrace && !movedExt127) ? ext127
+               : ext2618;
+  const color = 'darkgreen';
+  const label = `Fibonacci Target ${level.toFixed(2)}`;
 
-  console.log(
-    `[Fib] ${containerId}: drawing fib line at ${level.toFixed(2)}, ` +
-    `color=${color}`
-  );
-  
-  // finally draw
+  // draw the price line with label
   series.createPriceLine({
     price:            level,
     color,
     lineWidth:        2,
     lineStyle:        0,
-    axisLabelVisible: true
+    axisLabelVisible: true,
+    title:            label
   });
 }
