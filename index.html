@@ -5,23 +5,31 @@
     <title>Liquidity‑Cycle Dashboard</title>
     <link rel="icon" href="/favicon.png" />
     <style>
-      body{font-family:system-ui,sans-serif;margin:2rem}
-      #chartContainer{max-width:800px;height:400px;margin-top:1rem}
-      pre{white-space:pre-wrap;background:#f6f6f6;padding:.5rem}
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      #chartContainer {
+        max-width: 800px;
+        height: 400px;
+        margin-top: 1rem;
+      }
+      pre {
+        white-space: pre-wrap;
+        background: #f6f6f6;
+        padding: 0.5rem;
+      }
     </style>
   </head>
-
   <body>
     <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
-
-    <button id="aiBtn">AI Summary</button>
+    <button id="aiBtn">AI Summary</button>
     <pre id="out"></pre>
     <div id="chartContainer"></div>
 
-    <!-- bundle puts `window.LightweightCharts` on the page -->
+    <!-- ✅ NEW: Include axios and lightweight-charts as global scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
-
-    <!-- dashboard logic -->
-    <script type="module" src="/main.js"></script>
+    <script src="/main.js"></script>
   </body>
 </html>
