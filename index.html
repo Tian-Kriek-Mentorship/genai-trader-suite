@@ -23,6 +23,12 @@
       color: white;
       border-radius: 5px;
     }
+    input#scannerFilter {
+      font-size: 20px;
+      padding: 0.5rem;
+      width: 300px;
+      margin-bottom: 0.5rem;
+    }
     pre {
       white-space: pre-wrap;
       background: #f6f6f6;
@@ -112,10 +118,11 @@
     </div>
   </div>
 
-  <!-- Scanner: now with H1 Target -->
+  <!-- Scanner: filter + top‑20 default -->
   <h2>Scanner</h2>
+  <input id="scannerFilter" placeholder="Filter symbols…" />
   <div id="scanner">
-    <table id="scannerTable" style="width:100%; border-collapse: collapse; margin-top: 0.5rem;">
+    <table id="scannerTable" style="width:100%; border-collapse: collapse;">
       <thead>
         <tr>
           <th>Symbol</th>
@@ -131,7 +138,7 @@
   <!-- Explanation -->
   <div class="explanation">
     <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
-    <!-- ... rest of explanation ... -->
+    <!-- … rest of your explanation … -->
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
