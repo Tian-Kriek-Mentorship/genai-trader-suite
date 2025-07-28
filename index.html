@@ -1,105 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Liquidity‑Cycle Dashboard</title>
-    <link rel="icon" href="/favicon.png" />
-    <style>
-      body {
-        font-family: system-ui, sans-serif;
-        font-size: 20px;
-        margin: 2rem;
-      }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GenAI Trader Suite</title>
+  <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #111;
+      color: #fff;
+    }
 
-      h1 {
-        margin-bottom: 1rem;
-        font-size: 2rem;
-      }
+    select {
+      padding: 8px;
+      font-size: 16px;
+      margin-bottom: 20px;
+    }
 
-      h2 {
-        margin-top: 2rem;
-        font-size: 1.5rem;
-      }
+    .chart-container {
+      margin-bottom: 40px;
+    }
 
-      #dailyChart,
-      #hourlyChart {
-        max-width: 800px;
-        height: 400px;
-        margin-top: 1rem;
-      }
+    #dailyChart, #hourlyChart {
+      width: 100%;
+      max-width: 900px;
+      height: 400px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>📈 GenAI Trader Suite</h1>
 
-      pre {
-        white-space: pre-wrap;
-        background: #f6f6f6;
-        padding: 0.5rem;
-        max-width: 800px;
-      }
+  <!-- Symbol selector -->
+  <select id="symbolSelect">
+    <option value="CS.D.BITCOIN.CFD.IP">BTC/USD</option>
+    <option value="CS.D.EURUSD.CFD.IP">EUR/USD</option>
+    <option value="IX.D.NVDA.IFD.IP">NVDA</option>
+  </select>
 
-      button {
-        margin-bottom: 1rem;
-        padding: 0.5rem 1rem;
-        font-size: 1rem;
-      }
+  <!-- Chart containers -->
+  <div class="chart-container">
+    <h2>Daily Chart</h2>
+    <div id="dailyChart"></div>
+  </div>
 
-      .grid-layout {
-        display: grid;
-        grid-template-columns: 800px 1fr;
-        gap: 2rem;
-        align-items: start;
-      }
+  <div class="chart-container">
+    <h2>Hourly Chart</h2>
+    <div id="hourlyChart"></div>
+  </div>
 
-      .explanation {
-        line-height: 1.6;
-        max-width: 600px;
-      }
-
-      select {
-        margin: 1rem 0;
-        font-size: 1rem;
-        padding: 0.5rem;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
-    <button id="aiBtn">AI Summary</button>
-    <pre id="out"></pre>
-
-    <label for="symbolSelect"><strong>Symbol:</strong></label>
-    <select id="symbolSelect">
-  <option value="CS.D.BITCOIN.CFD.IP">BTC/USD</option>
-  <option value="CS.D.EURUSD.CFD.IP">EUR/USD</option>
-  <option value="IX.D.NVDA.IFD.IP">NVDA</option>
-</select>
-
-</select>
-
-    </select>
-
-    <div class="grid-layout">
-      <div>
-        <h2>BTCUSD — Daily</h2>
-        <div id="dailyChart"></div>
-
-        <h2>BTCUSD — Hourly</h2>
-        <div id="hourlyChart"></div>
-      </div>
-
-      <div class="explanation">
-        <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
-        <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto, forex, and equity markets.</p>
-        <ul>
-          <li>📅 <strong>Daily chart</strong> – big-picture trend</li>
-          <li>🕐 <strong>Hourly chart</strong> – short-term structure</li>
-        </ul>
-        <p><strong>Goal:</strong> Spot shifts in momentum and liquidity to trade with the market — not against it.</p>
-      </div>
-    </div>
-
-    <!-- ✅ Chart library first -->
-    <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-
-    <!-- ✅ Your logic -->
-    <script src="/main.js"></script>
-  </body>
+  <!-- Script -->
+  <script type="module" src="/main.js"></script>
+</body>
 </html>
