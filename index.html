@@ -103,5 +103,11 @@
   <!-- Chart library and main logic -->
   <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
   <script src="/main.js"></script>
+  <!-- ✅ Load chart library first -->
+<script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
+
+<!-- ✅ Then load your logic -->
+<script src="/main.js"></script>
+
 </body>
 </html>
