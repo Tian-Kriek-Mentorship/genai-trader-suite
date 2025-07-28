@@ -1,8 +1,8 @@
-import { createChart } from 'https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.esm.js';
+import { createChart } from "https://esm.sh/lightweight-charts@4.0.0";
 
 console.log("✅ main.js loaded");
 
-// --- Chart setup ---
+// ------------------ Chart Setup ------------------
 const dailyChart = createChart(document.getElementById("dailyChart"), {
   width: 800,
   height: 400,
