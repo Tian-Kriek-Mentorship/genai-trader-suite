@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,6 +111,21 @@
     </div>
   </div>
 
+  <!-- Scanner: moved here -->
+  <h2>Scanner</h2>
+  <div id="scanner">
+    <table id="scannerTable" style="width:100%; border-collapse: collapse; margin-top: 0.5rem;">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Probability</th>
+          <th>Signal</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
   <!-- Explanation -->
   <div class="explanation">
     <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
@@ -141,21 +155,6 @@
       <li>🌍 Asset switching (ETH, SPX, DXY, etc.)</li>
       <li>🧠 AI summaries and alerts</li>
     </ul>
-  </div>
-
-  <!-- Scanner -->
-  <h2>Scanner</h2>
-  <div id="scanner">
-    <table id="scannerTable" style="width:100%; border-collapse: collapse; margin-top: 0.5rem;">
-      <thead>
-        <tr>
-          <th>Symbol</th>
-          <th>Probability</th>
-          <th>Signal</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
