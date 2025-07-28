@@ -1,6 +1,6 @@
 console.log("✅ main.js loaded");
 
-// Use global script from v4 CDN (no import/export)
+// ------------------ Chart Setup ------------------
 const dailyChart = LightweightCharts.createChart(document.getElementById("dailyChart"), {
   width: 800,
   height: 400,
@@ -13,66 +13,91 @@ const h1Chart = LightweightCharts.createChart(document.getElementById("hourlyCha
 const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
 const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
+// ------------------ Fetch Candle Data (Proxy to /api/quotes) ------------------
 async function fetchCandles(symbol, interval) {
   const res = await fetch(`/api/quotes?symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
-  if (!res.ok) throw new Error("Failed to fetch candle data");
+  if (!res.ok) {
+    console.error("Failed to fetch candle data");
+    return [];
+  }
   const data = await res.json();
-
-  return data.values.map(c => ({
-    time: Math.floor(new Date(c.datetime).getTime() / 1000),
-    open: parseFloat(c.open),
-    high: parseFloat(c.high),
-    low: parseFloat(c.low),
-    close: parseFloat(c.close),
-  })).reverse();
+  return data.values
+    .map(c => ({
+      time: Math.floor(new Date(c.datetime).getTime() / 1000),
+      open: parseFloat(c.open),
+      high: parseFloat(c.high),
+      low: parseFloat(c.low),
+      close: parseFloat(c.close),
+    }))
+    .reverse(); // Twelve Data returns newest first
 }
 
+// ------------------ Fibonacci Logic ------------------
 function plotFibonacci(chart, candles) {
-  if (candles.length < 50) return;
+  const len = candles.length;
+  if (len < 50) return;
 
-  let swingLow = candles.at(-50);
-  let swingHigh = candles.at(-50);
-  for (let i = candles.length - 50; i < candles.length; i++) {
+  let swingLow = candles[len - 50];
+  let swingHigh = candles[len - 50];
+
+  for (let i = len - 50; i < len; i++) {
     if (candles[i].low < swingLow.low) swingLow = candles[i];
     if (candles[i].high > swingHigh.high) swingHigh = candles[i];
   }
 
   const isUptrend = swingHigh.time > swingLow.time;
-  const start = isUptrend ? swingLow : swingHigh;
-  const end = isUptrend ? swingHigh : swingLow;
-  const range = Math.abs(end.close - start.close);
+  const fibStart = isUptrend ? swingLow : swingHigh;
+  const fibEnd = isUptrend ? swingHigh : swingLow;
+  const range = Math.abs(fibEnd.close - fibStart.close);
 
-  const levels = [1.618, 2.618].map(f => isUptrend
-    ? end.close + range * (f - 1)
-    : end.close - range * (f - 1));
+  const levels = isUptrend
+    ? [1.618, 2.618].map(m => fibEnd.close + range * (m - 1))
+    : [1.618, 2.618].map(m => fibEnd.close - range * (m - 1));
 
-  levels.forEach(level => {
-    const line = chart.addLineSeries({ color: isUptrend ? "green" : "red", lineWidth: 1 });
+  levels.forEach(price => {
+    const line = chart.addLineSeries({
+      color: isUptrend ? "green" : "red",
+      lineWidth: 1,
+      lineStyle: 1,
+    });
     line.setData([
-      { time: start.time, value: level },
-      { time: candles.at(-1).time, value: level },
+      { time: fibStart.time, value: price },
+      { time: candles[len - 1].time, value: price },
     ]);
   });
 }
 
+// ------------------ Load Charts ------------------
 async function loadCharts(symbol = "BTC/USD") {
-  const daily = await fetchCandles(symbol, "1day");
-  dailySeries.setData(daily);
-  plotFibonacci(dailyChart, daily);
+  try {
+    const dailyData = await fetchCandles(symbol, "1day");
+    dailySeries.setData(dailyData);
+    plotFibonacci(dailyChart, dailyData);
 
-  const h1 = await fetchCandles(symbol, "1h");
-  h1Series.setData(h1);
-  plotFibonacci(h1Chart, h1);
+    const h1Data = await fetchCandles(symbol, "1h");
+    h1Series.setData(h1Data);
+    plotFibonacci(h1Chart, h1Data);
+  } catch (err) {
+    console.error("Chart loading error:", err);
+  }
 }
 
-loadCharts();
+// ------------------ Symbol Dropdown ------------------
+document.getElementById("symbolSelect").addEventListener("change", (e) => {
+  const selected = e.target.value;
+  loadCharts(selected);
+});
 
+// ------------------ AI Summary ------------------
 document.getElementById("aiBtn").addEventListener("click", async () => {
-  const res = await fetch("/api/ai");
-  const data = await res.json();
-  document.getElementById("out").textContent = data.summary || "No summary found.";
+  try {
+    const res = await fetch("/api/ai");
+    const data = await res.json();
+    document.getElementById("out").textContent = data.summary || "No summary found.";
+  } catch (err) {
+    document.getElementById("out").textContent = "Failed to load summary.";
+  }
 });
 
-document.getElementById("symbolSelect").addEventListener("change", e => {
-  loadCharts(e.target.value);
-});
+// ------------------ Initial Load ------------------
+loadCharts("BTC/USD");
