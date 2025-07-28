@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -39,7 +38,6 @@
       box-sizing: border-box;
       margin-top: 0.5rem;
     }
-
     .charts-container {
       display: flex;
       align-items: flex-start;
@@ -55,13 +53,11 @@
       height: 700px;
       margin-top: 0.5rem;
     }
-
     .summary-block {
       width: 100%;
       max-width: none;
       margin-bottom: 1rem;
     }
-
     .explanation {
       font-size: 22px;
       line-height: 1.7;
@@ -75,7 +71,6 @@
     .explanation li {
       margin-bottom: 0.75rem;
     }
-
     /* Scanner table styling */
     #scannerTable th, #scannerTable td {
       border: 1px solid #ddd;
@@ -95,9 +90,7 @@
     <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">
       Select Symbol:
     </label>
-    <select id="symbolSelect" style="font-size:20px; padding:0.3rem;">
-      <!-- options populated by JS -->
-    </select>
+    <select id="symbolSelect" style="font-size:20px; padding:0.3rem;"></select>
   </div>
 
   <!-- AI Summary -->
@@ -118,11 +111,11 @@
     </div>
   </div>
 
-  <!-- Scanner: filter + top‑20 default -->
+  <!-- Scanner: filter + H1 Target column -->
   <h2>Scanner</h2>
   <input id="scannerFilter" placeholder="Filter symbols…" />
   <div id="scanner">
-    <table id="scannerTable" style="width:100%; border-collapse: collapse;">
+    <table id="scannerTable" style="width:100%; border-collapse: collapse; margin-top: 0.5rem;">
       <thead>
         <tr>
           <th>Symbol</th>
@@ -138,7 +131,32 @@
   <!-- Explanation -->
   <div class="explanation">
     <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
-    <!-- … rest of your explanation … -->
+    <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
+    <p>Instead of watching dozens of charts or guessing when to trade, this dashboard shows you how Bitcoin (BTCUSDT) is behaving across two key timeframes:</p>
+    <ul>
+      <li>📅 <strong>Daily chart</strong> – the big picture trend</li>
+      <li>🕐 <strong>Hourly chart</strong> – short-term moves</li>
+    </ul>
+    <p><strong>The goal?</strong><br>
+    To spot shifts in momentum and liquidity – so you trade with the market, not against it.</p>
+
+    <h4>Why It’s Called “Liquidity‑Cycle”</h4>
+    <p>In every market, price moves in cycles – from accumulation to expansion, then slowdown and reversal. These cycles are driven by liquidity (where the money is). This dashboard makes it easier to:</p>
+    <ul>
+      <li>✅ See when buyers/sellers are taking control</li>
+      <li>✅ Time entries during expansions, not chop</li>
+      <li>✅ Avoid trades when liquidity dries up</li>
+    </ul>
+
+    <h4>What’s “v0.1”?</h4>
+    <p>This is the first public version, focused only on BTC/USDT.<br>
+    Future updates will include:</p>
+    <ul>
+      <li>📊 Trend strength indicators</li>
+      <li>📈 Volume + momentum overlays</li>
+      <li>🌍 Asset switching (ETH, SPX, DXY, etc.)</li>
+      <li>🧠 AI summaries and alerts</li>
+    </ul>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
