@@ -111,10 +111,13 @@ updateDashboard();
 // fetch + draw
 async function fetchAndDraw(symbol,type,interval,containerId) {
   const limit=1000;
-  const resp=await axios.get('https://api.binance.com/api/v3/klines',{ params:{symbol,interval,limit} });
+  const resp=await axios.get('https://api.binance.com/api/v3/klines',{
+    params:{ symbol, interval, limit }
+  });
   const data=resp.data.map(k=>({
     time:k[0]/1000, open:+k[1], high:+k[2], low:+k[3], close:+k[4]
   }));
+
   const container=document.getElementById(containerId);
   container.innerHTML='';
   const chart=LightweightCharts.createChart(container,{
@@ -124,30 +127,38 @@ async function fetchAndDraw(symbol,type,interval,containerId) {
   });
   const series=chart.addCandlestickSeries();
   series.setData(data);
+
+  // stash chart, series, data
   charts[containerId]={chart,series,data};
-  if(containerId==='dailyChart'){
-    const closes=data.map(d=>d.close);
-    const emaArr=ema(closes,45);
-    const emaData=data.map((d,i)=>({time:d.time,value:emaArr[i]})).filter(pt=>pt.value!=null);
-    const emaS=chart.addLineSeries({color:'orange',lineWidth:2});
-    emaS.setData(emaData);
-    charts[containerId].emaArr=emaArr;
+
+  // NEW: Add EMA on any 1d series (includes scannerTempDaily)
+  if (interval === '1d') {
+    const closes = data.map(d=>d.close);
+    const emaArr = ema(closes,45);
+    const emaData = data
+      .map((d,i)=>({ time:d.time, value:emaArr[i] }))
+      .filter(pt=>pt.value!=null);
+    const emaSeries = chart.addLineSeries({ color:'orange', lineWidth:2 });
+    emaSeries.setData(emaData);
+    // stash for probability check
+    charts[containerId].emaArr = emaArr;
   }
 }
 
 // fibs auto-zoom
 function drawFibsOnChart(containerId) {
   const e=charts[containerId]; if(!e) return;
-  const{chart,series,data}=e;
+  const { chart, series, data } = e;
   const opens=data.map(d=>d.open), highs=data.map(d=>d.high), lows=data.map(d=>d.low);
   const ma50=sma(opens,50), ma200=sma(opens,200);
-  let lastGC=-1,lastDC=-1;
+  let lastGC=-1, lastDC=-1;
   for(let i=1;i<opens.length;i++){
-    if(ma50[i]>ma200[i]&&ma50[i-1]<=ma200[i-1]) lastGC=i;
-    if(ma50[i]<ma200[i]&&ma50[i-1]>=ma200[i-1]) lastDC=i;
+    if(ma50[i]>ma200[i]&& ma50[i-1]<=ma200[i-1]) lastGC=i;
+    if(ma50[i]<ma200[i]&& ma50[i-1]>=ma200[i-1]) lastDC=i;
   }
   const isUp=lastGC>lastDC, idx=isUp?lastGC:lastDC; if(idx<0)return;
-  let pre=idx,start=(isUp?lastDC:lastGC)>0?(isUp?lastDC:lastGC):0;
+  // find swings...
+  let pre=idx, start=(isUp?lastDC:lastGC)>0?(isUp?lastDC:lastGC):0;
   for(let i=start;i<idx;i++){
     if(isUp? lows[i]<lows[pre] : highs[i]>highs[pre]) pre=i;
   }
@@ -155,7 +166,8 @@ function drawFibsOnChart(containerId) {
   for(let i=idx+2;i<data.length-2;i++){
     const fh=highs[i]>highs[i-1]&&highs[i]>highs[i-2]&&highs[i]>highs[i+1]&&highs[i]>highs[i+2];
     const fl=lows[i]<lows[i-1]&&lows[i]<lows[i-2]&&lows[i]<lows[i+1]&&lows[i]<lows[i+2];
-    if(isUp&&fh){post=i;break;} if(!isUp&&fl){post=i;break;}
+    if(isUp&&fh){ post=i; break; }
+    if(!isUp&&fl){ post=i; break; }
   }
   if(post<0)return;
   const preP=isUp?lows[pre]:highs[pre], postP=isUp?highs[post]:lows[post], r=Math.abs(postP-preP);
@@ -169,26 +181,26 @@ function drawFibsOnChart(containerId) {
     else    { if(highs[i]>=retrace) t=true; if(lows[i]<=ext127) m=true; }
   }
   const level = t?ext618:(!t&&!m?ext127:ext2618);
-  series.createPriceLine({ price:level, color:'darkgreen', lineWidth:2, lineStyle:0, axisLabelVisible:true });
+  series.createPriceLine({ price:level, color:'darkgreen', lineWidth:2, axisLabelVisible:true });
   if(!e.zoomSeries){
-    const zs=chart.addLineSeries({color:'rgba(0,0,0,0)',lineWidth:0});
+    const zs=chart.addLineSeries({ color:'rgba(0,0,0,0)', lineWidth:0 });
     e.zoomSeries=zs;
   }
   e.zoomSeries.setData([
-    {time:data[0].time,value:level},
-    {time:data[data.length-1].time,value:level}
+    { time:data[0].time,           value:level },
+    { time:data[data.length-1].time, value:level }
   ]);
 }
 
-// EMA & probability
+// EMA & probability; returns boolean
 function drawEMAandProbability(containerId) {
   const e=charts[containerId]; if(!e||!e.emaArr) return false;
-  const {chart,data,emaArr} = e;
-  const lastClose=data[data.length-1].close;
-  const lastE=emaArr[emaArr.length-1];
-  const bull= lastClose>lastE;
-  const id=`${containerId}-prob`;
-  let div=document.getElementById(id);
+  const { data, emaArr } = e;
+  const lastClose = data[data.length-1].close;
+  const lastEma   = emaArr[emaArr.length-1];
+  const bull      = lastClose > lastEma;
+  const id        = `${containerId}-prob`;
+  let div = document.getElementById(id);
   if(!div){
     div=document.createElement('div');
     div.id=id;
@@ -202,54 +214,45 @@ function drawEMAandProbability(containerId) {
     div.style.pointerEvents='none';
     document.getElementById(containerId).appendChild(div);
   }
-  div.style.color=bull?'green':'red';
-  div.textContent=`${bull?'▲':'▼'}\nProbability - ${bull?'Bullish':'Bearish'}`;
+  div.style.color = bull?'green':'red';
+  div.textContent = `${bull?'▲':'▼'}\nProbability - ${bull?'Bullish':'Bearish'}`;
   return bull;
 }
 
 // RSI & signal on H1
 function drawRSIandSignal(containerId, bullishDaily) {
-  if (!bullishDaily) bullishDaily = false;
-  const e = charts[containerId]; if (!e) return null;
-  const { data } = e;
-  const closes = data.map(d => d.close);
-  const rsiArr = rsi(closes, 13);
-  const validRsi = rsiArr.filter(v => v !== null);
-  const rsiMA = sma(validRsi, 14);
-  const lastIdx = rsiArr.length - 1;
-  const lastR = rsiArr[lastIdx];
-  const lastMA = rsiMA[rsiMA.length - 1];
-  let signalText, color, rtn = null;
-  if (bullishDaily) {
-    if (lastR < 50 && lastR > lastMA) {
-      signalText = 'Buy Signal confirmed'; color = 'green'; rtn = true;
-    } else {
-      signalText = 'Wait for Buy Signal'; color = 'gray'; rtn = null;
-    }
+  const e = charts[containerId]; if(!e) return null;
+  const closes = e.data.map(d=>d.close);
+  const rsiArr = rsi(closes,13);
+  const valid  = rsiArr.filter(v=>v!=null);
+  const maArr  = sma(valid,14);
+  const lastR  = rsiArr[rsiArr.length-1];
+  const lastM  = maArr[maArr.length-1];
+  let txt, clr, rtn=null;
+  if(bullishDaily){
+    if(lastR<50 && lastR>lastM){ txt='Buy Signal confirmed'; clr='green'; rtn=true; }
+    else { txt='Wait for Buy Signal'; clr='gray'; }
   } else {
-    if (lastR > 50 && lastR < lastMA) {
-      signalText = 'Sell Signal confirmed'; color = 'red'; rtn = false;
-    } else {
-      signalText = 'Wait for Sell Signal'; color = 'gray'; rtn = null;
-    }
+    if(lastR>50 && lastR<lastM){ txt='Sell Signal confirmed'; clr='red'; rtn=false; }
+    else { txt='Wait for Sell Signal'; clr='gray'; }
   }
-  const overlayId = containerId + '-rsi-signal';
-  let div = document.getElementById(overlayId);
-  if (!div) {
-    div = document.createElement('div');
-    div.id = overlayId;
-    div.style.position = 'absolute';
-    div.style.top = '8px';
-    div.style.left = '8px';
-    div.style.zIndex = '20';
-    div.style.fontSize = '16px';
-    div.style.fontWeight = 'bold';
-    div.style.whiteSpace = 'pre';
-    div.style.pointerEvents = 'none';
+  const id = `${containerId}-rsi-signal`;
+  let div = document.getElementById(id);
+  if(!div){
+    div=document.createElement('div');
+    div.id=id;
+    div.style.position='absolute';
+    div.style.top='8px';
+    div.style.left='8px';
+    div.style.zIndex='20';
+    div.style.fontSize='16px';
+    div.style.fontWeight='bold';
+    div.style.whiteSpace='pre';
+    div.style.pointerEvents='none';
     document.getElementById(containerId).appendChild(div);
   }
-  div.style.color = color;
-  div.textContent = `RSI: ${lastR.toFixed(2)}\n${signalText}`;
+  div.style.color = clr;
+  div.textContent = `RSI: ${lastR.toFixed(2)}\n${txt}`;
   return rtn;
 }
 
@@ -259,29 +262,19 @@ async function runScanner() {
   tbody.innerHTML = '';
   let tmpD = document.getElementById('scannerTempDaily');
   let tmpH = document.getElementById('scannerTempHourly');
-  if (!tmpD) {
-    tmpD = document.createElement('div');
-    tmpD.id = 'scannerTempDaily';
-    tmpD.style.display = 'none';
-    document.body.appendChild(tmpD);
-  }
-  if (!tmpH) {
-    tmpH = document.createElement('div');
-    tmpH.id = 'scannerTempHourly';
-    tmpH.style.display = 'none';
-    document.body.appendChild(tmpH);
-  }
+  if(!tmpD){ tmpD=document.createElement('div'); tmpD.id='scannerTempDaily'; tmpD.style.display='none'; document.body.appendChild(tmpD); }
+  if(!tmpH){ tmpH=document.createElement('div'); tmpH.id='scannerTempHourly'; tmpH.style.display='none'; document.body.appendChild(tmpH); }
 
-  for (const sym of symbols) {
-    await fetchAndDraw(sym, 'daily',  '1d', 'scannerTempDaily');
-    const probBull = drawEMAandProbability('scannerTempDaily');
-    await fetchAndDraw(sym, 'hourly', '1h', 'scannerTempHourly');
-    const sig = drawRSIandSignal('scannerTempHourly', probBull);
+  for(const sym of symbols){
+    await fetchAndDraw(sym,'daily','1d','scannerTempDaily');
+    const prob = drawEMAandProbability('scannerTempDaily');
+    await fetchAndDraw(sym,'hourly','1h','scannerTempHourly');
+    const sig  = drawRSIandSignal('scannerTempHourly', prob);
 
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${sym}</td>
-      <td style="color:${probBull?'green':'red'}">${probBull?'Bullish':'Bearish'}</td>
+      <td style="color:${prob?'green':'red'}">${prob?'Bullish':'Bearish'}</td>
       <td style="color:${sig===true?'green':sig===false?'red':'gray'}">
         ${sig===true?'Buy Signal confirmed':sig===false?'Sell Signal confirmed':'Wait for signal'}
       </td>`;
@@ -289,5 +282,4 @@ async function runScanner() {
   }
 }
 
-// run scanner on load
 window.addEventListener('load', runScanner);
