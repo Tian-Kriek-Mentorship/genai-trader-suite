@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   const pricesUrl = `https://api.ig.com/gateway/deal/prices/${epic}?resolution=${resolution}&max=${max}`;
 
   try {
-    // 1. Authenticate and retrieve tokens
+    // Step 1: Login to IG
     const loginRes = await fetch(loginUrl, {
       method: "POST",
       headers: {
@@ -27,15 +27,18 @@ export default async function handler(req, res) {
       }),
     });
 
-    const loginData = await loginRes.json();
+    if (!loginRes.ok) {
+      return res.status(loginRes.status).json({ error: "IG login failed" });
+    }
+
     const cst = loginRes.headers.get("CST");
     const xSecurityToken = loginRes.headers.get("X-SECURITY-TOKEN");
 
     if (!cst || !xSecurityToken) {
-      return res.status(401).json({ error: "IG auth failed" });
+      return res.status(401).json({ error: "Missing tokens from IG login" });
     }
 
-    // 2. Get historical prices
+    // Step 2: Fetch OHLC data
     const pricesRes = await fetch(pricesUrl, {
       method: "GET",
       headers: {
@@ -47,19 +50,25 @@ export default async function handler(req, res) {
       },
     });
 
+    if (!pricesRes.ok) {
+      return res.status(pricesRes.status).json({ error: "IG price fetch failed" });
+    }
+
     const pricesData = await pricesRes.json();
 
-    const candles = pricesData.prices.map(c => ({
-      time: Math.floor(new Date(c.snapshotTimeUTC).getTime() / 1000),
-      open: c.openPrice.ask,
-      high: c.highPrice.ask,
-      low: c.lowPrice.ask,
-      close: c.closePrice.ask,
-    }));
+    const candles = pricesData.prices
+      .filter(p => p.closePrice?.bid)
+      .map(p => ({
+        time: Math.floor(new Date(p.snapshotTimeUTC).getTime() / 1000),
+        open: p.openPrice.bid,
+        high: p.highPrice.bid,
+        low: p.lowPrice.bid,
+        close: p.closePrice.bid,
+      }));
 
     return res.status(200).json({ candles });
   } catch (err) {
-    console.error("IG API error", err);
+    console.error("IG API error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
