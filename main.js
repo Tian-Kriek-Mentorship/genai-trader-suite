@@ -81,12 +81,12 @@ async function fetchAndDraw(symbol, type, interval, containerId) {
     close: +k[4]
   }));
 
-  // build chart
+  // build chart with extra top margin (30%) so far‑out targets show
   const container = document.getElementById(containerId);
   container.innerHTML = '';
   const chart  = LightweightCharts.createChart(container, {
     layout:            { textColor: '#000' },
-    rightPriceScale:   { scaleMargins: { top: 0.1, bottom: 0.1 } },
+    rightPriceScale:   { scaleMargins: { top: 0.3, bottom: 0.1 } },
     timeScale:         { timeVisible: true, secondsVisible: false }
   });
   const series = chart.addCandlestickSeries();
