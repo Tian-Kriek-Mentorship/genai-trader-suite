@@ -7,21 +7,31 @@
     <style>
       body {
         font-family: system-ui, sans-serif;
-        font-size: 26px;
+        font-size: 20px;
         margin: 2rem;
       }
 
       h1 {
+        font-size: 32px;
         margin-bottom: 1rem;
       }
 
       h2 {
         margin-top: 2rem;
-        font-size: 1.8rem;
+        font-size: 24px;
       }
 
-      h3, h4 {
-        margin-top: 1.5rem;
+      select {
+        font-size: 1rem;
+        padding: 0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      button {
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+        margin-left: 1rem;
+        margin-bottom: 1rem;
       }
 
       #dailyChart,
@@ -34,92 +44,36 @@
       pre {
         white-space: pre-wrap;
         background: #f6f6f6;
-        padding: 0.5rem;
+        padding: 1rem;
         max-width: 800px;
-      }
-
-      button {
-        margin-bottom: 1rem;
-        padding: 1rem 2rem;
-        font-size: 1.2rem;
-      }
-
-      .grid-layout {
-        display: grid;
-        grid-template-columns: 800px 1fr;
-        gap: 2rem;
-        align-items: start;
-      }
-
-      .explanation {
-        font-size: 1.3rem;
-        line-height: 1.6;
-        max-width: 600px;
-        padding-top: 2rem;
-      }
-
-      .explanation ul {
-        margin-top: 0.5rem;
-        padding-left: 1.2rem;
-      }
-
-      .explanation li {
-        margin-bottom: 0.5rem;
+        font-size: 0.95rem;
       }
     </style>
   </head>
+
   <body>
     <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
+
+    <label for="symbolSelect"><strong>Select Symbol:</strong></label>
+    <select id="symbolSelect">
+      <option value="BTC/USD">BTC/USD</option>
+      <option value="EUR/USD">EUR/USD</option>
+      <option value="NVDA">NVDA</option>
+    </select>
+
     <button id="aiBtn">AI Summary</button>
-    <pre id="out"></pre>
-<select id="symbolSelect">
-  <option value="BTC/USD">BTC/USD</option>
-  <option value="ETH/USD">ETH/USD</option>
-  <option value="EUR/USD">EUR/USD</option>
-  <option value="NVDA">NVDA</option>
-  <!-- Add more symbols here -->
-</select>
+    <pre id="out">Click "AI Summary" to fetch a trading insight.</pre>
 
-    <div class="grid-layout">
-      <div>
-        <h2>BTCUSDT — Daily</h2>
-        <div id="dailyChart"></div>
+    <h2>BTC/USD – Daily</h2>
+    <div id="dailyChart"></div>
 
-        <h2>BTCUSDT — 1 Hour</h2>
-        <div id="hourlyChart"></div>
-      </div>
+    <h2>BTC/USD – 1 Hour</h2>
+    <div id="hourlyChart"></div>
 
-      <div class="explanation">
-        <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
-        <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
-        <p>Instead of watching dozens of charts or guessing when to trade, this dashboard shows you how Bitcoin (BTCUSDT) is behaving across two key timeframes:</p>
-        <ul>
-          <li>📅 <strong>Daily chart</strong> – the big picture trend</li>
-          <li>🕐 <strong>Hourly chart</strong> – short-term moves</li>
-        </ul>
-        <p><strong>The goal?</strong><br>
-        To spot shifts in momentum and liquidity – so you trade with the market, not against it.</p>
+    <!-- External chart library -->
+    <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
 
-        <h4>Why It’s Called “Liquidity‑Cycle”</h4>
-        <p>In every market, price moves in cycles – from accumulation to expansion, then slowdown and reversal. These cycles are driven by liquidity (where the money is). This dashboard makes it easier to:</p>
-        <ul>
-          <li>✅ See when buyers/sellers are taking control</li>
-          <li>✅ Time entries during expansions, not chop</li>
-          <li>✅ Avoid trades when liquidity dries up</li>
-        </ul>
-
-        <h4>What’s “v0.1”?</h4>
-        <p>This is the first public version, focused only on BTC/USDT.<br>
-        Future updates will include:</p>
-        <ul>
-          <li>📊 Trend strength indicators</li>
-          <li>📈 Volume + momentum overlays</li>
-          <li>🌍 Asset switching (ETH, SPX, DXY, etc.)</li>
-          <li>🧠 AI summaries and alerts</li>
-        </ul>
-      </div>
-    </div>
-
-    <script type="module" src="/main.js"></script>
+    <!-- Your custom script -->
+    <script src="/main.js" type="module"></script>
   </body>
 </html>
