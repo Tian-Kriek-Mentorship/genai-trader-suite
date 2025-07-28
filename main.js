@@ -1,11 +1,11 @@
 console.log("✅ main.js loaded");
 
 // ------------------ Chart Setup ------------------
-const dailyChart = LightweightCharts.createChart(document.getElementById("dailyChart"), {
+const dailyChart = createChart(document.getElementById("dailyChart"), {
   width: 800,
   height: 400,
 });
-const h1Chart = LightweightCharts.createChart(document.getElementById("hourlyChart"), {
+const h1Chart = createChart(document.getElementById("hourlyChart"), {
   width: 800,
   height: 400,
 });
@@ -27,7 +27,7 @@ async function fetchCandles(symbol, interval) {
       low: parseFloat(candle.low),
       close: parseFloat(candle.close),
     }))
-    .reverse(); // API returns newest first
+    .reverse(); // Twelve Data returns most recent first
 }
 
 // ------------------ Fibonacci Logic ------------------
@@ -67,22 +67,19 @@ function plotFibonacci(chart, candles) {
 
 // ------------------ Load + Plot ------------------
 async function loadCharts(symbol = "BTC/USD") {
-  try {
-    const dailyData = await fetchCandles(symbol, "1day");
-    dailySeries.setData(dailyData);
-    plotFibonacci(dailyChart, dailyData);
+  const dailyData = await fetchCandles(symbol, "1day");
+  dailySeries.setData(dailyData);
+  plotFibonacci(dailyChart, dailyData);
 
-    const h1Data = await fetchCandles(symbol, "1h");
-    h1Series.setData(h1Data);
-    plotFibonacci(h1Chart, h1Data);
-  } catch (err) {
-    console.error("Load error:", err);
-  }
+  const h1Data = await fetchCandles(symbol, "1h");
+  h1Series.setData(h1Data);
+  plotFibonacci(h1Chart, h1Data);
 }
 
-loadCharts(); // Load default
+// ------------------ Initial Load ------------------
+loadCharts();
 
-// ------------------ AI Summary ------------------
+// ------------------ AI Summary Button ------------------
 document.getElementById("aiBtn").addEventListener("click", async () => {
   const res = await fetch("/api/ai");
   const data = await res.json();
@@ -91,5 +88,6 @@ document.getElementById("aiBtn").addEventListener("click", async () => {
 
 // ------------------ Symbol Selector ------------------
 document.getElementById("symbolSelect").addEventListener("change", (e) => {
-  loadCharts(e.target.value);
+  const selectedSymbol = e.target.value;
+  loadCharts(selectedSymbol);
 });
