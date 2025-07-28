@@ -1,6 +1,9 @@
-import { createChart } from "https://esm.sh/lightweight-charts@4.0.0";
-
 console.log("✅ main.js loaded");
+
+// Import from lightweight-charts CDN (still ESM-safe)
+import {
+  createChart
+} from 'https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js';
 
 // ------------------ Chart Setup ------------------
 const dailyChart = createChart(document.getElementById("dailyChart"), {
@@ -12,29 +15,32 @@ const h1Chart = createChart(document.getElementById("hourlyChart"), {
   height: 400,
 });
 
-const dailySeries = dailyChart.addCandlestickSeries({ upColor: "#26a69a", downColor: "#ef5350", borderVisible: false });
-const h1Series = h1Chart.addCandlestickSeries({ upColor: "#26a69a", downColor: "#ef5350", borderVisible: false });
+const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
+const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
+// ------------------ Fetch from Your API ------------------
+async function fetchCandles(symbol, interval) {
+  const res = await fetch(`/api/quotes?symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
+  if (!res.ok) throw new Error("Failed to fetch candle data");
+  const data = await res.json();
 
-// --- Fetch Binance Data ---
-async function fetchBinanceData(symbol = "BTCUSDT", interval = "1d", limit = 500) {
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-  const res = await fetch(url);
-  const raw = await res.json();
-  return raw.map(c => ({
-    time: c[0] / 1000,
-    open: parseFloat(c[1]),
-    high: parseFloat(c[2]),
-    low: parseFloat(c[3]),
-    close: parseFloat(c[4]),
-  }));
+  return data.values
+    .map(candle => ({
+      time: Math.floor(new Date(candle.datetime).getTime() / 1000),
+      open: parseFloat(candle.open),
+      high: parseFloat(candle.high),
+      low: parseFloat(candle.low),
+      close: parseFloat(candle.close),
+    }))
+    .reverse(); // API returns newest first, reverse for chart
 }
 
-// --- Fibonacci Overlay ---
+// ------------------ Fibonacci Logic ------------------
 function plotFibonacci(chart, candles) {
   const len = candles.length;
   if (len < 50) return;
 
+  // Find recent swing low and high
   let swingLow = candles[len - 50];
   let swingHigh = candles[len - 50];
 
@@ -43,57 +49,53 @@ function plotFibonacci(chart, candles) {
     if (candles[i].high > swingHigh.high) swingHigh = candles[i];
   }
 
-  const isUp = swingHigh.time > swingLow.time;
-  const base = isUp ? swingLow : swingHigh;
-  const peak = isUp ? swingHigh : swingLow;
-  const range = Math.abs(peak.close - base.close);
+  const isUptrend = swingHigh.time > swingLow.time;
+  const fibStart = isUptrend ? swingLow : swingHigh;
+  const fibEnd = isUptrend ? swingHigh : swingLow;
+  const range = Math.abs(fibEnd.close - fibStart.close);
 
-  const levels = isUp
-    ? [1.618, 2.618].map(m => peak.close + range * (m - 1))
-    : [1.618, 2.618].map(m => peak.close - range * (m - 1));
+  const levels = isUptrend
+    ? [1.618, 2.618].map(mult => fibEnd.close + range * (mult - 1))
+    : [1.618, 2.618].map(mult => fibEnd.close - range * (mult - 1));
 
-  levels.forEach(price => {
-    const line = chart.addLineSeries({
-      color: isUp ? "green" : "red",
+  levels.forEach((price, i) => {
+    const fibLine = chart.addLineSeries({
+      color: isUptrend ? "green" : "red",
       lineWidth: 1,
+      lineStyle: 1,
     });
-    line.setData([
-      { time: base.time, value: price },
+    fibLine.setData([
+      { time: fibStart.time, value: price },
       { time: candles[len - 1].time, value: price },
     ]);
   });
 }
 
-// --- Load + Render ---
-(async () => {
-  const dailyData = await fetchBinanceData("BTCUSDT", "1d");
+// ------------------ Load + Plot ------------------
+async function loadCharts(symbol = "BTC/USD") {
+  const dailyData = await fetchCandles(symbol, "1day");
   dailySeries.setData(dailyData);
   plotFibonacci(dailyChart, dailyData);
 
-  const h1Data = await fetchBinanceData("BTCUSDT", "1h");
+  const h1Data = await fetchCandles(symbol, "1h");
   h1Series.setData(h1Data);
   plotFibonacci(h1Chart, h1Data);
-})();
+}
+
+// Initial load
+loadCharts();
 
 // ------------------ AI Summary Button ------------------
 document.getElementById("aiBtn").addEventListener("click", async () => {
-  try {
-    const res = await fetch("/api/ai", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        symbol: "BTCUSDT",     // Or make this dynamic if needed
-        timeframe: "1d"        // Could be "1d" or "1h", adjust as needed
-      })
-    });
-
-    if (!res.ok) throw new Error("API error");
-
-    const data = await res.json();
-    document.getElementById("out").textContent = data?.text || "No summary found.";
-  } catch (err) {
-    console.error("AI summary error:", err);
-    document.getElementById("out").textContent = "Error loading AI summary.";
-  }
+  const res = await fetch("/api/ai");
+  const data = await res.json();
+  document.getElementById("out").textContent = data.summary || "No summary found.";
 });
 
+// ------------------ Symbol Search Dropdown ------------------
+const symbolDropdown = document.getElementById("symbolSelect");
+
+symbolDropdown.addEventListener("change", (e) => {
+  const selectedSymbol = e.target.value;
+  loadCharts(selectedSymbol);
+});
