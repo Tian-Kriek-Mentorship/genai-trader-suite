@@ -15,22 +15,31 @@ const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
 // ------------------ Fetch Candle Data (Proxy to /api/quotes) ------------------
 async function fetchCandles(symbol, interval) {
-  const res = await fetch(`/api/quotes?symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
-  if (!res.ok) {
-    console.error("Failed to fetch candle data");
+  try {
+    const res = await fetch(`/api/quotes?symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    
+    const data = await res.json();
+    if (!data || !Array.isArray(data.values)) {
+      console.error("Unexpected response structure:", data);
+      return [];
+    }
+
+    return data.values
+      .map(c => ({
+        time: Math.floor(new Date(c.datetime).getTime() / 1000),
+        open: parseFloat(c.open),
+        high: parseFloat(c.high),
+        low: parseFloat(c.low),
+        close: parseFloat(c.close),
+      }))
+      .reverse(); // Twelve Data sends latest first
+  } catch (err) {
+    console.error("Fetch error:", err);
     return [];
   }
-  const data = await res.json();
-  return data.values
-    .map(c => ({
-      time: Math.floor(new Date(c.datetime).getTime() / 1000),
-      open: parseFloat(c.open),
-      high: parseFloat(c.high),
-      low: parseFloat(c.low),
-      close: parseFloat(c.close),
-    }))
-    .reverse(); // Twelve Data returns newest first
 }
+
 
 // ------------------ Fibonacci Logic ------------------
 function plotFibonacci(chart, candles) {
