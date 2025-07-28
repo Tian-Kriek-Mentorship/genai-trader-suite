@@ -21,7 +21,11 @@
     <!-- bundle puts `window.LightweightCharts` on the page -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 
-    <!-- dashboard logic -->
-    <script type="module" src="/main.js"></script>
+    <!-- 2 ▸ dashboard logic -->
+<script type="module">
+  import('/main.js').catch(e => console.error('main.js failed to load:', e));
+  console.log('INLINE MODULE RAN – if you see this, browser executed main.js import');
+</script>
+
   </body>
 </html>
