@@ -1,6 +1,6 @@
 console.log("✅ main.js loaded");
 
-// ------------------ Chart Setup ------------------
+// Use Lightweight Charts v4 (already globally available)
 const dailyChart = LightweightCharts.createChart(document.getElementById("dailyChart"), {
   width: 800,
   height: 400,
@@ -13,35 +13,20 @@ const h1Chart = LightweightCharts.createChart(document.getElementById("hourlyCha
 const dailySeries = dailyChart.addLineSeries({ color: "#2962FF" });
 const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 
-// ------------------ Fetch Candle Data (Proxy to /api/quotes) ------------------
-async function fetchCandles(symbol, interval) {
-  try {
-    const res = await fetch(`/api/quotes?symbol=${encodeURIComponent(symbol)}&interval=${interval}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    
-    const data = await res.json();
-    if (!data || !Array.isArray(data.values)) {
-      console.error("Unexpected response structure:", data);
-      return [];
-    }
-
-    return data.values
-      .map(c => ({
-        time: Math.floor(new Date(c.datetime).getTime() / 1000),
-        open: parseFloat(c.open),
-        high: parseFloat(c.high),
-        low: parseFloat(c.low),
-        close: parseFloat(c.close),
-      }))
-      .reverse(); // Twelve Data sends latest first
-  } catch (err) {
-    console.error("Fetch error:", err);
-    return [];
-  }
+// ------------------ Fetch CoinGecko Candle Data ------------------
+async function fetchCoinGeckoCandles(symbolId, days = 30) {
+  const res = await fetch(`https://api.coingecko.com/api/v3/coins/${symbolId}/ohlc?vs_currency=usd&days=${days}`);
+  const data = await res.json();
+  return data.map(candle => ({
+    time: Math.floor(candle[0] / 1000),
+    open: candle[1],
+    high: candle[2],
+    low: candle[3],
+    close: candle[4],
+  }));
 }
 
-
-// ------------------ Fibonacci Logic ------------------
+// ------------------ Fibonacci Plot ------------------
 function plotFibonacci(chart, candles) {
   const len = candles.length;
   if (len < 50) return;
@@ -60,53 +45,52 @@ function plotFibonacci(chart, candles) {
   const range = Math.abs(fibEnd.close - fibStart.close);
 
   const levels = isUptrend
-    ? [1.618, 2.618].map(m => fibEnd.close + range * (m - 1))
-    : [1.618, 2.618].map(m => fibEnd.close - range * (m - 1));
+    ? [1.618, 2.618].map(mult => fibEnd.close + range * (mult - 1))
+    : [1.618, 2.618].map(mult => fibEnd.close - range * (mult - 1));
 
   levels.forEach(price => {
-    const line = chart.addLineSeries({
+    const fibLine = chart.addLineSeries({
       color: isUptrend ? "green" : "red",
       lineWidth: 1,
       lineStyle: 1,
     });
-    line.setData([
+    fibLine.setData([
       { time: fibStart.time, value: price },
       { time: candles[len - 1].time, value: price },
     ]);
   });
 }
 
-// ------------------ Load Charts ------------------
-async function loadCharts(symbol = "BTC/USD") {
-  try {
-    const dailyData = await fetchCandles(symbol, "1day");
-    dailySeries.setData(dailyData);
-    plotFibonacci(dailyChart, dailyData);
+// ------------------ Load + Plot ------------------
+async function loadCharts(symbolId = "bitcoin") {
+  const dailyData = await fetchCoinGeckoCandles(symbolId, 30);
+  dailySeries.setData(dailyData);
+  plotFibonacci(dailyChart, dailyData);
 
-    const h1Data = await fetchCandles(symbol, "1h");
-    h1Series.setData(h1Data);
-    plotFibonacci(h1Chart, h1Data);
-  } catch (err) {
-    console.error("Chart loading error:", err);
-  }
+  const h1Data = await fetchCoinGeckoCandles(symbolId, 1); // shorter timeframe
+  h1Series.setData(h1Data);
+  plotFibonacci(h1Chart, h1Data);
 }
 
-// ------------------ Symbol Dropdown ------------------
-document.getElementById("symbolSelect").addEventListener("change", (e) => {
-  const selected = e.target.value;
-  loadCharts(selected);
-});
+// Initial load
+loadCharts("bitcoin");
 
-// ------------------ AI Summary ------------------
+// ------------------ AI Summary Button ------------------
 document.getElementById("aiBtn").addEventListener("click", async () => {
-  try {
-    const res = await fetch("/api/ai");
-    const data = await res.json();
-    document.getElementById("out").textContent = data.summary || "No summary found.";
-  } catch (err) {
-    document.getElementById("out").textContent = "Failed to load summary.";
-  }
+  const res = await fetch("/api/ai");
+  const data = await res.json();
+  document.getElementById("out").textContent = data.summary || "No summary found.";
 });
 
-// ------------------ Initial Load ------------------
-loadCharts("BTC/USD");
+// ------------------ Symbol Selector ------------------
+const symbolDropdown = document.getElementById("symbolSelect");
+
+symbolDropdown.addEventListener("change", (e) => {
+  const selected = e.target.value;
+  const coinGeckoMap = {
+    "BTC/USD": "bitcoin",
+    "ETH/USD": "ethereum",
+  };
+  const coinId = coinGeckoMap[selected] || "bitcoin";
+  loadCharts(coinId);
+});
