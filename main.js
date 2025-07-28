@@ -18,39 +18,23 @@ async function fetchCoinGeckoCandles(symbolId, days = 30) {
   const res = await fetch(`/api/crypto?symbol=${symbolId}&days=${days}`);
   const data = await res.json();
 
-  if (!Array.isArray(data.candles)) {
-    console.error("⛔ Unexpected response format:", data);
-    throw new Error("Unexpected data structure from /api/crypto");
+  if (!data.candles || !Array.isArray(data.candles)) {
+    console.error("Unexpected response structure:", data);
+    throw new Error("Invalid candle data received");
   }
 
-  // Now we’re sure it's an array of arrays
-  return data.candles.map(candle => {
-    if (!Array.isArray(candle) || candle.length < 5) {
-      console.warn("⚠️ Skipping malformed candle:", candle);
-      return null;
-    }
-
-    const [time, open, high, low, close] = candle;
-    return {
-      time: Math.floor(time / 1000),
-      open,
-      high,
-      low,
-      close
-    };
-  }).filter(Boolean);
+  return data.candles;
 }
-
 
 // ------------------ Fibonacci Plot ------------------
 function plotFibonacci(chart, candles) {
   const len = candles.length;
-  if (len < 10) return;
+  if (len < 50) return;
 
-  let swingLow = candles[len - 10];
-  let swingHigh = candles[len - 10];
+  let swingLow = candles[len - 50];
+  let swingHigh = candles[len - 50];
 
-  for (let i = len - 10; i < len; i++) {
+  for (let i = len - 50; i < len; i++) {
     if (candles[i].low < swingLow.low) swingLow = candles[i];
     if (candles[i].high > swingHigh.high) swingHigh = candles[i];
   }
@@ -81,12 +65,16 @@ function plotFibonacci(chart, candles) {
 async function loadCharts(symbolId = "bitcoin") {
   try {
     const dailyData = await fetchCoinGeckoCandles(symbolId, 30);
-    dailySeries.setData(dailyData);
-    plotFibonacci(dailyChart, dailyData);
+    if (dailyData.length >= 50) {
+      dailySeries.setData(dailyData);
+      plotFibonacci(dailyChart, dailyData);
+    }
 
-    const h1Data = await fetchCoinGeckoCandles(symbolId, 1); // Reuse if no lower TF
-    h1Series.setData(h1Data);
-    plotFibonacci(h1Chart, h1Data);
+    const h1Data = await fetchCoinGeckoCandles(symbolId, 30); // use 30 instead of 1
+    if (h1Data.length >= 50) {
+      h1Series.setData(h1Data);
+      plotFibonacci(h1Chart, h1Data);
+    }
   } catch (err) {
     console.error("Chart loading error:", err);
   }
@@ -110,8 +98,7 @@ symbolDropdown.addEventListener("change", (e) => {
   const coinGeckoMap = {
     "BTC/USD": "bitcoin",
     "ETH/USD": "ethereum",
-    "EUR/USD": "euro",
-    "NVDA": "nvidia",
+    "LTC/USD": "litecoin",
   };
   const coinId = coinGeckoMap[selected] || "bitcoin";
   loadCharts(coinId);
