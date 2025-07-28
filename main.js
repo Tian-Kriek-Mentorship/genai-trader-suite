@@ -164,28 +164,50 @@ function drawEMAandProbability(containerId) {
 
 // RSI & signal on H1
 function drawRSIandSignal(containerId, bullishDaily) {
-  if(!bullishDaily) bullishDaily=false;
-  const e=charts[containerId]; if(!e) return;
-  const {chart,data} = e;
-  const closes=data.map(d=>d.close);
-  const rsiArr=rsi(closes,13);
-  const maR=rsiArr.map(v=>v).filter(v=>v!=null);
-  const rsiMA=sma(rsiArr.filter(v=>v!=null),14);
-  const len=rsiArr.length;
-  const lastR=rsiArr[len-1];
-  const lastMA=rsiMA[rsiMA.length-1];
-  // decide text
-  let text, color;
-  if(bullishDaily) {
-    if(lastR<50 && lastR>lastMA) { text='Buy Signal confirmed'; color='green'; }
-    else { text='Wait for Buy Signal'; color='gray'; }
+  if (!bullishDaily) bullishDaily = false;
+  const e = charts[containerId]; if (!e) return;
+  const { data } = e;
+  // Calculate RSI(13)
+  const closes = data.map(d => d.close);
+  const rsiArr = rsi(closes, 13);
+  // Calculate SMA(14) of RSI
+  const rsiValid = rsiArr.filter(v => v !== null);
+  const rsiMA = sma(rsiValid, 14);
+  const lastIdx = rsiArr.length - 1;
+  const lastR = rsiArr[lastIdx];
+  const lastMA = rsiMA[rsiMA.length - 1];
+  // Determine signal text
+  let signalText, color;
+  if (bullishDaily) {
+    if (lastR < 50 && lastR > lastMA) {
+      signalText = 'Buy Signal confirmed'; color = 'green';
+    } else {
+      signalText = 'Wait for Buy Signal'; color = 'gray';
+    }
   } else {
-    if(lastR>50 && lastR<lastMA) { text='Sell Signal confirmed'; color='red'; }
-    else { text='Wait for Sell Signal'; color='gray'; }
+    if (lastR > 50 && lastR < lastMA) {
+      signalText = 'Sell Signal confirmed'; color = 'red';
+    } else {
+      signalText = 'Wait for Sell Signal'; color = 'gray';
+    }
   }
-  // overlay
-  const id=`${containerId}-rsi-signal`;
-  let div=document.getElementById(id);
-  if(!div){ div=document.createElement('div'); div.id=id; div.style.position='absolute'; div.style.top='8px'; div.style.right='8px'; div.style.zIndex='20'; div.style.fontSize='16px'; div.style.fontWeight='bold'; div.style.whiteSpace='pre'; div.style.pointerEvents='none'; document.getElementById(containerId).appendChild(div); }
-  div.style.color=color; div.textContent=text;
+  // Overlay on H1 chart upper-left
+  const overlayId = containerId + '-rsi-signal';
+  let div = document.getElementById(overlayId);
+  if (!div) {
+    div = document.createElement('div');
+    div.id = overlayId;
+    div.style.position      = 'absolute';
+    div.style.top           = '8px';
+    div.style.left          = '8px';
+    div.style.zIndex        = '20';
+    div.style.fontSize      = '16px';
+    div.style.fontWeight    = 'bold';
+    div.style.whiteSpace    = 'pre';
+    div.style.pointerEvents = 'none';
+    document.getElementById(containerId).appendChild(div);
+  }
+  div.style.color = color;
+  div.textContent = `RSI: ${lastR.toFixed(2)}
+${signalText}`;
 }
