@@ -38,6 +38,19 @@
       color: white;
       border-radius: 5px;
     }
+    .explanation {
+      font-size: 22px;
+      line-height: 1.7;
+      max-width: 800px;
+      margin-top: 2rem;
+    }
+    .explanation ul {
+      margin-top: 0.5rem;
+      padding-left: 1.4rem;
+    }
+    .explanation li {
+      margin-bottom: 0.75rem;
+    }
   </style>
 </head>
 <body>
@@ -53,7 +66,7 @@
     </select>
   </div>
 
-  <!-- Summary block stays at top -->
+  <!-- AI Summary -->
   <button id="aiBtn">AI Summary</button>
   <pre id="out"></pre>
 
@@ -65,7 +78,7 @@
   <div id="hourlyChart"></div>
 
   <!-- Explanation moved below charts -->
-  <div class="explanation" style="font-size:22px; line-height:1.7; max-width:800px; margin-top:2rem;">
+  <div class="explanation">
     <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
     <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
     <p>Instead of watching dozens of charts or guessing when to trade, this dashboard shows you how Bitcoin (BTCUSDT) is behaving across two key timeframes:</p>
