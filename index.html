@@ -1,113 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Liquidity‑Cycle Dashboard</title>
-  <link rel="icon" href="/favicon.png" />
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      font-size: 20px;
-      margin: 2rem;
-    }
+  <head>
+    <meta charset="utf-8" />
+    <title>Liquidity‑Cycle Dashboard</title>
+    <link rel="icon" href="/favicon.png" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        font-size: 20px;
+        margin: 2rem;
+      }
 
-    h1 {
-      font-size: 28px;
-      margin-bottom: 1rem;
-    }
+      h1 {
+        margin-bottom: 1rem;
+        font-size: 2rem;
+      }
 
-    h2 {
-      margin-top: 2rem;
-      font-size: 22px;
-    }
+      h2 {
+        margin-top: 2rem;
+        font-size: 1.4rem;
+      }
 
-    .grid-layout {
-      display: grid;
-      grid-template-columns: 800px 1fr;
-      gap: 2rem;
-      align-items: start;
-    }
+      #dailyChart,
+      #hourlyChart {
+        max-width: 800px;
+        height: 400px;
+        margin-top: 1rem;
+      }
 
-    #dailyChart, #hourlyChart {
-      width: 800px;
-      height: 400px;
-      margin-bottom: 2rem;
-    }
+      pre {
+        white-space: pre-wrap;
+        background: #f6f6f6;
+        padding: 0.5rem;
+        max-width: 800px;
+      }
 
-    .explanation {
-      font-size: 1.1rem;
-      line-height: 1.6;
-      max-width: 600px;
-    }
+      button {
+        margin-bottom: 1rem;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+      }
 
-    .explanation ul {
-      padding-left: 1.2rem;
-    }
+      .grid-layout {
+        display: grid;
+        grid-template-columns: 800px 1fr;
+        gap: 2rem;
+        align-items: start;
+      }
 
-    pre {
-      white-space: pre-wrap;
-      background: #f6f6f6;
-      padding: 1rem;
-      margin-top: 1rem;
-      font-size: 1rem;
-    }
+      .explanation {
+        line-height: 1.6;
+        max-width: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
 
-    select, button {
-      font-size: 1.1rem;
-      padding: 0.5rem 1rem;
-      margin-bottom: 1rem;
-    }
-  </style>
-</head>
-<body>
-  <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
-  <button id="aiBtn">AI Summary</button>
-  <select id="symbolSelect">
-    <option value="BTC/USD">BTC/USD</option>
-    <option value="ETH/USD">ETH/USD</option>
-    <option value="EUR/USD">EUR/USD</option>
-    <option value="NVDA">NVDA</option>
-    <option value="AAPL">AAPL</option>
-  </select>
-  <pre id="out"></pre>
+    <button id="aiBtn">AI Summary</button>
+    <select id="symbolSelect">
+      <option value="BTC/USD" selected>BTC/USD</option>
+      <option value="ETH/USD">ETH/USD</option>
+      <option value="EUR/USD">EUR/USD</option>
+      <option value="NVDA">NVDA</option>
+    </select>
 
-  <div class="grid-layout">
-    <div>
-      <h2>BTCUSDT — Daily</h2>
-      <div id="dailyChart"></div>
+    <pre id="out"></pre>
 
-      <h2>BTCUSDT — 1 Hour</h2>
-      <div id="hourlyChart"></div>
+    <div class="grid-layout">
+      <div>
+        <h2>Daily Chart</h2>
+        <div id="dailyChart"></div>
+
+        <h2>1H Chart</h2>
+        <div id="hourlyChart"></div>
+      </div>
+
+      <div class="explanation">
+        <h3>What Is the Liquidity‑Cycle Dashboard?</h3>
+        <p>
+          This dashboard shows how liquidity is entering or exiting the market
+          using two charts per symbol: daily and 1-hour. It helps identify
+          trending vs. choppy conditions and gives early warning of shifts in
+          buyer/seller momentum.
+        </p>
+        <p>
+          Future updates will include more symbols, volume overlays, and AI
+          alerts.
+        </p>
+      </div>
     </div>
 
-    <div class="explanation">
-      <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
-      <p>This dashboard helps traders understand where money is flowing in and out of financial markets (crypto, forex, stocks).</p>
-      <p>Instead of guessing when to trade, it visualizes trends and liquidity flows on two timeframes:</p>
-      <ul>
-        <li>📅 <strong>Daily chart</strong> – big picture</li>
-        <li>🕐 <strong>Hourly chart</strong> – timing entries</li>
-      </ul>
-      <p><strong>The goal:</strong><br> Spot momentum shifts and liquidity zones so you trade with the market, not against it.</p>
+    <!-- ✅ Chart library loaded first -->
+    <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
 
-      <h4>What’s “v0.1”?</h4>
-      <p>This is the first version. Future versions will support:</p>
-      <ul>
-        <li>📈 Technical indicators</li>
-        <li>🌍 More asset classes</li>
-        <li>🔔 Alerts and AI trade summaries</li>
-      </ul>
-    </div>
-  </div>
-
-  <!-- Chart library and main logic -->
-  <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="/main.js"></script>
-  <!-- ✅ Load chart library first -->
-<script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-
-<!-- ✅ Then load your logic -->
-<script src="/main.js"></script>
-
-</body>
+    <!-- ✅ Then your script -->
+    <script src="/main.js"></script>
+  </body>
 </html>
