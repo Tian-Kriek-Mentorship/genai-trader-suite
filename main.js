@@ -17,20 +17,31 @@ const h1Series = h1Chart.addLineSeries({ color: "#FF9800" });
 async function fetchCoinGeckoCandles(symbolId, days = 30) {
   const res = await fetch(`/api/crypto?symbol=${symbolId}&days=${days}`);
   const data = await res.json();
-  if (!data.candles) throw new Error("Unexpected data structure from proxy");
-  return data.candles;
-}
 
+  if (!Array.isArray(data.candles)) {
+    console.error("Unexpected response:", data);
+    throw new Error("Unexpected data structure from proxy");
+  }
+
+  // Convert [timestamp, open, high, low, close] to proper object
+  return data.candles.map(([time, open, high, low, close]) => ({
+    time: Math.floor(time / 1000),
+    open,
+    high,
+    low,
+    close,
+  }));
+}
 
 // ------------------ Fibonacci Plot ------------------
 function plotFibonacci(chart, candles) {
   const len = candles.length;
-  if (len < 50) return;
+  if (len < 10) return;
 
-  let swingLow = candles[len - 50];
-  let swingHigh = candles[len - 50];
+  let swingLow = candles[len - 10];
+  let swingHigh = candles[len - 10];
 
-  for (let i = len - 50; i < len; i++) {
+  for (let i = len - 10; i < len; i++) {
     if (candles[i].low < swingLow.low) swingLow = candles[i];
     if (candles[i].high > swingHigh.high) swingHigh = candles[i];
   }
@@ -59,13 +70,17 @@ function plotFibonacci(chart, candles) {
 
 // ------------------ Load + Plot ------------------
 async function loadCharts(symbolId = "bitcoin") {
-  const dailyData = await fetchCoinGeckoCandles(symbolId, 30);
-  dailySeries.setData(dailyData);
-  plotFibonacci(dailyChart, dailyData);
+  try {
+    const dailyData = await fetchCoinGeckoCandles(symbolId, 30);
+    dailySeries.setData(dailyData);
+    plotFibonacci(dailyChart, dailyData);
 
-  const h1Data = await fetchCoinGeckoCandles(symbolId, 1); // shorter timeframe
-  h1Series.setData(h1Data);
-  plotFibonacci(h1Chart, h1Data);
+    const h1Data = await fetchCoinGeckoCandles(symbolId, 1); // Reuse if no lower TF
+    h1Series.setData(h1Data);
+    plotFibonacci(h1Chart, h1Data);
+  } catch (err) {
+    console.error("Chart loading error:", err);
+  }
 }
 
 // Initial load
@@ -86,6 +101,8 @@ symbolDropdown.addEventListener("change", (e) => {
   const coinGeckoMap = {
     "BTC/USD": "bitcoin",
     "ETH/USD": "ethereum",
+    "EUR/USD": "euro",
+    "NVDA": "nvidia",
   };
   const coinId = coinGeckoMap[selected] || "bitcoin";
   loadCharts(coinId);
