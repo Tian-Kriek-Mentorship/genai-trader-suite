@@ -91,7 +91,7 @@ async function generateAISummary() {
 }
 aiBtn.addEventListener('click', generateAISummary);
 
-// 7) Main update
+// 7) Update
 async function updateDashboard() {
   const sym = symbolSelect.value;
   dailyTitle.textContent  = `${sym} — Daily`;
@@ -103,7 +103,6 @@ async function updateDashboard() {
   const bullishDaily = drawEMAandProbability('dailyChart');
   drawRSIandSignal('hourlyChart', bullishDaily);
   await generateAISummary();
-  runScanner();
 }
 symbolSelect.addEventListener('change',updateDashboard);
 updateDashboard();
@@ -115,11 +114,7 @@ async function fetchAndDraw(symbol,type,interval,containerId) {
   const data=resp.data.map(k=>({time:k[0]/1000, open:+k[1], high:+k[2], low:+k[3], close:+k[4]}));
   const container=document.getElementById(containerId);
   container.innerHTML='';
-  const chart=LightweightCharts.createChart(container,{
-    layout:{textColor:'#000'},
-    rightPriceScale:{scaleMargins:{top:0.3,bottom:0.1}},
-    timeScale:{timeVisible:true,secondsVisible:false}
-  });
+  const chart=LightweightCharts.createChart(container,{ layout:{textColor:'#000'}, rightPriceScale:{scaleMargins:{top:0.3,bottom:0.1}}, timeScale:{timeVisible:true,secondsVisible:false} });
   const series=chart.addCandlestickSeries(); series.setData(data);
   charts[containerId]={chart,series,data};
   if(containerId==='dailyChart'){
@@ -138,157 +133,81 @@ function drawFibsOnChart(containerId) {
   const opens=data.map(d=>d.open), highs=data.map(d=>d.high), lows=data.map(d=>d.low);
   const ma50=sma(opens,50), ma200=sma(opens,200);
   let lastGC=-1,lastDC=-1;
-  for(let i=1;i<opens.length;i++){
-    if(ma50[i]>ma200[i]&&ma50[i-1]<=ma200[i-1]) lastGC=i;
-    if(ma50[i]<ma200[i]&&ma50[i-1]>=ma200[i-1]) lastDC=i;
-  }
+  for(let i=1;i<opens.length;i++){ if(ma50[i]>ma200[i]&&ma50[i-1]<=ma200[i-1]) lastGC=i; if(ma50[i]<ma200[i]&&ma50[i-1]>=ma200[i-1]) lastDC=i; }
   const isUp=lastGC>lastDC, idx=isUp?lastGC:lastDC; if(idx<0)return;
   let pre=idx,start=(isUp?lastDC:lastGC)>0?(isUp?lastDC:lastGC):0;
-  for(let i=start;i<idx;i++){
-    if(isUp? lows[i]<lows[pre] : highs[i]>highs[pre]) pre=i;
-  }
+  for(let i=start;i<idx;i++){ if(isUp? lows[i]<lows[pre] : highs[i]>highs[pre]) pre=i; }
   let post=-1;
-  for(let i=idx+2;i<data.length-2;i++){
-    const fh=highs[i]>highs[i-1]&&highs[i]>highs[i-2]&&highs[i]>highs[i+1]&&highs[i]>highs[i+2];
-    const fl=lows[i]<lows[i-1]&&lows[i]<lows[i-2]&&lows[i]<lows[i+1]&&lows[i]<lows[i+2];
-    if(isUp&&fh){post=i;break;} if(!isUp&&fl){post=i;break;}
-  }
-  if(post<0)return;
+  for(let i=idx+2;i<data.length-2;i++){ const fh=highs[i]>highs[i-1]&&highs[i]>highs[i-2]&&highs[i]>highs[i+1]&&highs[i]>highs[i+2]; const fl=lows[i]<lows[i-1]&&lows[i]<lows[i-2]&&lows[i]<lows[i+1]&&lows[i]<lows[i+2]; if(isUp&&fh){post=i;break;} if(!isUp&&fl){post=i;break;} } if(post<0)return;
   const preP=isUp?lows[pre]:highs[pre], postP=isUp?highs[post]:lows[post], r=Math.abs(postP-preP);
-  const retrace=isUp?postP-r*0.618:postP+r*0.618;
-  const ext127=isUp?postP+r*0.27:postP-r*0.27;
-  const ext618=isUp?postP+r*0.618:postP-r*0.618;
-  const ext2618=isUp?postP+r*1.618:postP-r*1.618;
-  let t=false,m=false;
-  for(let i=post+1;i<data.length;i++){
-    if(isUp){ if(lows[i]<=retrace) t=true; if(highs[i]>=ext127) m=true; }
-    else    { if(highs[i]>=retrace) t=true; if(lows[i]<=ext127) m=true; }
-  }
+  const retrace=isUp?postP-r*0.618:postP+r*0.618; const ext127=isUp?postP+r*0.27:postP-r*0.27; const ext618=isUp?postP+r*0.618:postP-r*0.618; const ext2618=isUp?postP+r*1.618:postP-r*1.618;
+  let t=false,m=false; for(let i=post+1;i<data.length;i++){ if(isUp? lows[i]<=retrace: highs[i]>=retrace) t=true; if(isUp? highs[i]>=ext127: lows[i]<=ext127) m=true; }
   const level = t?ext618:(!t&&!m?ext127:ext2618);
-  series.createPriceLine({
-    price: level, color:'darkgreen', lineWidth:2, lineStyle:0, axisLabelVisible:true
-  });
-  if(!e.zoomSeries){
-    const zs=chart.addLineSeries({color:'rgba(0,0,0,0)',lineWidth:0});
-    e.zoomSeries=zs;
-  }
-  e.zoomSeries.setData([
-    {time:data[0].time,value:level},
-    {time:data[data.length-1].time,value:level}
-  ]);
+  series.createPriceLine({price:level,color:'darkgreen',lineWidth:2,lineStyle:0,axisLabelVisible:true});
+  if(!e.zoomSeries){ const zs=chart.addLineSeries({color:'rgba(0,0,0,0)',lineWidth:0}); e.zoomSeries=zs; }
+  e.zoomSeries.setData([{time:data[0].time,value:level},{time:data[data.length-1].time,value:level}]);
 }
 
 // EMA & probability; returns bullishDaily boolean
 function drawEMAandProbability(containerId) {
   const e=charts[containerId]; if(!e||!e.emaArr) return false;
   const {chart,data,emaArr} = e;
-  const lastClose=data[data.length-1].close;
-  const lastE=emaArr[emaArr.length-1];
+  const lastClose=data[data.length-1].close; const lastE=emaArr[emaArr.length-1];
   const bull= lastClose>lastE;
+  // overlay inside chart
   const id=`${containerId}-prob`;
   let div=document.getElementById(id);
-  if(!div){
-    div=document.createElement('div');
-    div.id=id;
-    div.style.position='absolute';
-    div.style.top='8px';
-    div.style.left='8px';
-    div.style.zIndex='20';
-    div.style.fontSize='16px';
-    div.style.fontWeight='bold';
-    div.style.whiteSpace='pre';
-    div.style.pointerEvents='none';
-    document.getElementById(containerId).appendChild(div);
-  }
-  div.style.color=bull?'green':'red';
-  div.textContent=`${bull?'▲':'▼'}\nProbability - ${bull?'Bullish':'Bearish'}`;
+  if(!div){ div=document.createElement('div'); div.id=id; div.style.position='absolute'; div.style.top='8px'; div.style.left='8px'; div.style.zIndex='20'; div.style.fontSize='16px'; div.style.fontWeight='bold'; div.style.whiteSpace='pre'; div.style.pointerEvents='none'; document.getElementById(containerId).appendChild(div); }
+  div.style.color=bull?'green':'red'; div.textContent=`${bull?'▲':'▼'}\nProbability - ${bull?'Bullish':'Bearish'}`;
   return bull;
 }
 
 // RSI & signal on H1
 function drawRSIandSignal(containerId, bullishDaily) {
   if (!bullishDaily) bullishDaily = false;
-  const e = charts[containerId]; if (!e) return false;
+  const e = charts[containerId]; if (!e) return;
   const { data } = e;
+  // Calculate RSI(13)
   const closes = data.map(d => d.close);
   const rsiArr = rsi(closes, 13);
+  // Calculate SMA(14) of RSI
   const rsiValid = rsiArr.filter(v => v !== null);
   const rsiMA = sma(rsiValid, 14);
   const lastIdx = rsiArr.length - 1;
   const lastR = rsiArr[lastIdx];
   const lastMA = rsiMA[rsiMA.length - 1];
-  let signalText, color, rtn = null;
+  // Determine signal text
+  let signalText, color;
   if (bullishDaily) {
     if (lastR < 50 && lastR > lastMA) {
-      signalText = 'Buy Signal confirmed'; color = 'green'; rtn = true;
+      signalText = 'Buy Signal confirmed'; color = 'green';
     } else {
-      signalText = 'Wait for Buy Signal'; color = 'gray'; rtn = null;
+      signalText = 'Wait for Buy Signal'; color = 'gray';
     }
   } else {
     if (lastR > 50 && lastR < lastMA) {
-      signalText = 'Sell Signal confirmed'; color = 'red'; rtn = false;
+      signalText = 'Sell Signal confirmed'; color = 'red';
     } else {
-      signalText = 'Wait for Sell Signal'; color = 'gray'; rtn = null;
+      signalText = 'Wait for Sell Signal'; color = 'gray';
     }
   }
+  // Overlay on H1 chart upper-left
   const overlayId = containerId + '-rsi-signal';
   let div = document.getElementById(overlayId);
   if (!div) {
     div = document.createElement('div');
     div.id = overlayId;
-    div.style.position = 'absolute';
-    div.style.top = '8px';
-    div.style.left = '8px';
-    div.style.zIndex = '20';
-    div.style.fontSize = '16px';
-    div.style.fontWeight = 'bold';
-    div.style.whiteSpace = 'pre';
+    div.style.position      = 'absolute';
+    div.style.top           = '8px';
+    div.style.left          = '8px';
+    div.style.zIndex        = '20';
+    div.style.fontSize      = '16px';
+    div.style.fontWeight    = 'bold';
+    div.style.whiteSpace    = 'pre';
     div.style.pointerEvents = 'none';
     document.getElementById(containerId).appendChild(div);
   }
   div.style.color = color;
-  div.textContent = `RSI: ${lastR.toFixed(2)}\n${signalText}`;
-  return rtn;
+  div.textContent = `RSI: ${lastR.toFixed(2)}
+${signalText}`;
 }
-
-// ─── scanner ───────────────────────────────────────────────────────
-async function runScanner() {
-  const tbody = document.querySelector('#scannerTable tbody');
-  tbody.innerHTML = '';
-  // create hidden containers if not exist
-  let tmpD = document.getElementById('scannerTempDaily');
-  let tmpH = document.getElementById('scannerTempHourly');
-  if (!tmpD) {
-    tmpD = document.createElement('div');
-    tmpD.id = 'scannerTempDaily';
-    tmpD.style.display = 'none';
-    document.body.appendChild(tmpD);
-  }
-  if (!tmpH) {
-    tmpH = document.createElement('div');
-    tmpH.id = 'scannerTempHourly';
-    tmpH.style.display = 'none';
-    document.body.appendChild(tmpH);
-  }
-
-  for (const sym of symbols) {
-    // daily prob
-    await fetchAndDraw(sym, 'daily',  '1d', 'scannerTempDaily');
-    const probBull = drawEMAandProbability('scannerTempDaily');
-    // h1 signal
-    await fetchAndDraw(sym, 'hourly', '1h', 'scannerTempHourly');
-    const sig = drawRSIandSignal('scannerTempHourly', probBull);
-
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${sym}</td>
-      <td style="color:${probBull?'green':'red'}">${probBull?'Bullish':'Bearish'}</td>
-      <td style="color:${sig===true?'green':sig===false?'red':'gray'}">
-        ${sig===true?'Buy Signal confirmed':sig===false?'Sell Signal confirmed':'Wait for signal'}
-      </td>`;
-    tbody.appendChild(row);
-  }
-}
-
-// run scanner on load
-window.addEventListener('load', runScanner);
