@@ -29,7 +29,7 @@ async function generateAISummary() {
 
   try {
     // EXAMPLE placeholder: swap this out for your real endpoint & payload
-    const resp = await axios.post('/api/ai-summary', { symbol: sym });
+    const resp = await axios.post('/api/ai', { symbol: sym });
     outPre.textContent = resp.data.summary;
   } catch (err) {
     console.error(err);
