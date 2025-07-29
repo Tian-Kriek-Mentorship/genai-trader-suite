@@ -24,18 +24,21 @@ function saveCache(data) {
 }
 
 // ――― 0.5) Rate‑limit detection ―――
+// ――― 0.5) Rate‑limit detection ―――
 let rateLimited = false;
 axios.interceptors.response.use(
   res => res,
   err => {
-    const code = err.response?.status;
-    if (code === 429) {
-      console.warn('API rate limit reached');
+    if (err.response?.status === 429 && !rateLimited) {
       rateLimited = true;
+      // show banner
+      const b = document.getElementById('rateLimitBanner');
+      if (b) b.style.display = 'block';
     }
     return Promise.reject(err);
   }
 );
+
 
 // ――― 1) Config & State ―――
 const cryptoSymbols   = ['BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT','SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'];
