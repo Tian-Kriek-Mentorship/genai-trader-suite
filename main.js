@@ -238,8 +238,6 @@ async function fetchAndRender(symbol, interval, containerId) {
 
 // ――― 7) drawFibsOnChart ―――
 function drawFibsOnChart(cid){
-  // … your existing fib code …
-}
 
   const e=charts[cid]; if(!e?.data?.length) return;
   const {chart,series,data}=e;
