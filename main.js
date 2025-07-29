@@ -1,33 +1,25 @@
 // main.js
 
-import axios from 'axios';
-import { createChart } from 'lightweight-charts';
-
 // ――― 0) Shared localStorage Cache (30 min) ―――
-const SHARED_CACHE_KEY = 'genai_trader_suite_cache';
-const SHARED_CACHE_TTL = 30 * 60 * 1000;  // 30 minutes
-
-function loadSharedCache() {
+const CACHE_KEY = 'gtm_cache';
+const CACHE_TTL = 30 * 60 * 1000;
+function loadCache() {
   try {
-    const raw = localStorage.getItem(SHARED_CACHE_KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (Date.now() - obj.ts > SHARED_CACHE_TTL) {
-      localStorage.removeItem(SHARED_CACHE_KEY);
-      return null;
+    const s = localStorage.getItem(CACHE_KEY);
+    if (!s) return {};
+    const o = JSON.parse(s);
+    if (Date.now() - o.ts > CACHE_TTL) {
+      localStorage.removeItem(CACHE_KEY);
+      return {};
     }
-    return obj.data;
+    return o.data || {};
   } catch {
-    return null;
+    return {};
   }
 }
-
-function saveSharedCache(data) {
+function saveCache(data) {
   try {
-    localStorage.setItem(
-      SHARED_CACHE_KEY,
-      JSON.stringify({ ts: Date.now(), data })
-    );
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
   } catch {}
 }
 
@@ -53,29 +45,26 @@ const scannerFilter = document.getElementById('scannerFilter');
 const scannerTbody  = document.querySelector('#scannerTable tbody');
 
 // ――― 3) Math Helpers ―――
-function ema(arr,p){ const k=2/(p+1), out=[], n=arr.length; let prev;
+function ema(arr,p){const k=2/(p+1),out=[],n=arr.length;let prev;
   for(let i=0;i<n;i++){
-    if(i===p-1){ prev=arr.slice(0,p).reduce((a,b)=>a+b,0)/p; out[i]=prev; }
-    else if(i>=p){ prev=arr[i]*k+prev*(1-k); out[i]=prev; }
+    if(i===p-1){prev=arr.slice(0,p).reduce((a,b)=>a+b,0)/p;out[i]=prev;}
+    else if(i>=p){prev=arr[i]*k+prev*(1-k);out[i]=prev;}
     else out[i]=null;
   }
   return out;
 }
-
-function sma(arr,p){ const out=[];
+function sma(arr,p){const out=[];
   for(let i=0;i<arr.length;i++){
-    if(i<p-1){ out.push(null); continue; }
-    let s=0; for(let j=i-p+1;j<=i;j++) s+=arr[j];
+    if(i<p-1){out.push(null);continue;}
+    let s=0;for(let j=i-p+1;j<=i;j++)s+=arr[j];
     out.push(s/p);
   }
   return out;
 }
-
-function rsi(arr,p){ const gains=[], losses=[], out=[];
+function rsi(arr,p){const gains=[],losses=[],out=[];
   for(let i=1;i<arr.length;i++){
     const d=arr[i]-arr[i-1];
-    gains.push(d>0?d:0);
-    losses.push(d<0?-d:0);
+    gains.push(d>0?d:0);losses.push(d<0?-d:0);
   }
   let avgG=gains.slice(0,p).reduce((a,b)=>a+b,0)/p;
   let avgL=losses.slice(0,p).reduce((a,b)=>a+b,0)/p;
@@ -88,20 +77,18 @@ function rsi(arr,p){ const gains=[], losses=[], out=[];
   return out;
 }
 
-// ――― 4) Helpers & Interest Rates ―――
+// ――― 4) Interest Rates ―――
 function toTDSymbol(sym){
   if(cryptoSymbols.includes(sym)) return null;
   if(forexSymbols.includes(sym)) return `${sym.slice(0,3)}/${sym.slice(3)}`;
   return sym;
 }
-
 async function loadInterestRates(){
   try {
-    const r=await fetch('/interestRates.json');
-    interestRates=await r.json();
-  } catch { interestRates={}; }
+    const r = await fetch('/interestRates.json');
+    interestRates = await r.json();
+  } catch { interestRates = {}; }
 }
-
 function getPositiveCarryFX(){
   return forexSymbols.filter(sym=>{
     const b=sym.slice(0,3), q=sym.slice(3);
@@ -113,10 +100,8 @@ function getPositiveCarryFX(){
 async function getProjectedAnnualReturn(sym){
   if(projCache[sym]!==undefined) return projCache[sym];
   if(cryptoSymbols.includes(sym)){
-    const sc=loadSharedCache()||{};
-    if(sc[sym]?.proj!=null){
-      return projCache[sym]=sc[sym].proj;
-    }
+    const sc=loadCache();
+    if(sc[sym]?.proj!=null) return projCache[sym]=sc[sym].proj;
     try {
       const resp=await axios.get('https://api.binance.com/api/v3/klines',{
         params:{symbol:sym,interval:'1M',limit:60}
@@ -124,9 +109,7 @@ async function getProjectedAnnualReturn(sym){
       const d=resp.data;
       const first=parseFloat(d[0][4]), last=parseFloat(d[d.length-1][4]);
       const yrs=(d.length-1)/12, cagr=Math.pow(last/first,1/yrs)-1;
-      sc[sym]=sc[sym]||{};
-      sc[sym].proj=cagr;
-      saveSharedCache(sc);
+      sc[sym]=sc[sym]||{}; sc[sym].proj=cagr; saveCache(sc);
       return projCache[sym]=cagr;
     } catch {
       return projCache[sym]=null;
@@ -135,45 +118,34 @@ async function getProjectedAnnualReturn(sym){
   return projCache[sym]=null;
 }
 
-// ――― 6) fetchAndDraw (with shared cache) ―――
-async function fetchAndDraw(symbol,_,interval,containerId){
-  const sc=loadSharedCache()||{};
-  const key=interval;
-  if(sc[symbol]?.[key]){
-    renderChart(containerId, sc[symbol][key]);
-    return;
-  }
-
-  let data=[];
-  if(cryptoSymbols.includes(symbol)){
-    const r=await axios.get('https://api.binance.com/api/v3/klines',{
-      params:{symbol,interval,limit:1000}
-    });
-    data=r.data.map(k=>({
-      time:k[0]/1000, open:+k[1], high:+k[2], low:+k[3], close:+k[4]
-    }));
-  } else {
-    const td=toTDSymbol(symbol), tdInt=interval==='1d'?'1day':'1h';
-    const r=await axios.get('https://api.twelvedata.com/time_series',{
-      params:{symbol:td,interval:tdInt,outputsize:2200,apikey:API_KEY}
-    });
-    const vals=r.data.values||[];
-    data=vals.map(v=>({
-      time:Math.floor(new Date(v.datetime).getTime()/1000),
-      open:+v.open, high:+v.high, low:+v.low, close:+v.close
-    })).reverse();
-  }
-
+// ――― 6) fetchAndRender (with shared cache) ―――
+async function fetchAndRender(symbol,interval,containerId){
+  const sc=loadCache();
   sc[symbol]=sc[symbol]||{};
-  sc[symbol][key]=data;
-  saveSharedCache(sc);
-  renderChart(containerId, data);
-}
+  let data=sc[symbol][interval];
+  if(!data){
+    if(cryptoSymbols.includes(symbol)){
+      const r=await axios.get('https://api.binance.com/api/v3/klines',{params:{symbol,interval,limit:1000}});
+      data=r.data.map(k=>({time:k[0]/1000,open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
+    } else {
+      const tdInt=interval==='1d'?'1day':'1h';
+      const tdSym=toTDSymbol(symbol)||symbol;
+      const r=await axios.get('https://api.twelvedata.com/time_series',{params:{
+        symbol:tdSym,interval:tdInt,outputsize:2200,apikey:API_KEY
+      }});
+      const vals=r.data.values||[];
+      data=vals.map(v=>({
+        time:Math.floor(new Date(v.datetime).getTime()/1000),
+        open:+v.open,high:+v.high,low:+v.low,close:+v.close
+      })).reverse();
+    }
+    sc[symbol][interval]=data; saveCache(sc);
+  }
 
-function renderChart(containerId, data){
+  // render
   const c=document.getElementById(containerId);
   c.innerHTML='';
-  const chart=createChart(c,{
+  const chart=LightweightCharts.createChart(c,{
     layout:{textColor:'#000'},
     rightPriceScale:{scaleMargins:{top:0.3,bottom:0.1}},
     timeScale:{timeVisible:true,secondsVisible:false}
@@ -181,14 +153,32 @@ function renderChart(containerId, data){
   const series=chart.addCandlestickSeries();
   series.setData(data);
   charts[containerId]={chart,series,data};
+
+  // overlays
+  if(interval==='1d'){
+    const arr=ema(data.map(d=>d.close),45);
+    chart.addLineSeries({lineWidth:2})
+         .setData(data.map((d,i)=>({time:d.time,value:arr[i]})).filter(p=>p.value!=null));
+  } else {
+    const opens=data.map(d=>d.open);
+    const s50=sma(opens,50), s200=sma(opens,200);
+    chart.addLineSeries({lineWidth:2})
+         .setData(data.map((d,i)=>({time:d.time,value:s50[i]})).filter(p=>p.value!=null));
+    chart.addLineSeries({lineWidth:2})
+         .setData(data.map((d,i)=>({time:d.time,value:s200[i]})).filter(p=>p.value!=null));
+  }
+
+  // annotations
+  drawFibsOnChart(containerId);
+  if(interval==='1d') drawEMAandProbability(containerId);
+  if(interval==='1h') drawRSIandSignal(containerId, drawEMAandProbability('dailyChart'));
 }
 
 // ――― 7) drawFibsOnChart ―――
 function drawFibsOnChart(cid){
   const e=charts[cid]; if(!e?.data?.length) return;
   const {chart,series,data}=e;
-  const opens=data.map(d=>d.open),
-        m50=sma(opens,50), m200=sma(opens,200);
+  const opens=data.map(d=>d.open), m50=sma(opens,50), m200=sma(opens,200);
   let lastGC=-1,lastDC=-1;
   for(let i=1;i<opens.length;i++){
     if(m50[i]>m200[i]&&m50[i-1]<=m200[i-1]) lastGC=i;
@@ -199,44 +189,34 @@ function drawFibsOnChart(cid){
 
   const findPre=(st,en)=>{let idx=en;
     for(let i=st;i<=en;i++){
-      if(isUp?data[i].low<data[idx].low:data[i].high>data[idx].high)
-        idx=i;
+      if(isUp?data[i].low<data[idx].low:data[i].high>data[idx].high) idx=i;
     }
     return idx;
   };
   const findPost=from=>{for(let i=from+2;i<data.length-2;i++){
-    const fh=data[i].high>data[i-1].high&&data[i].high>data[i-2].high
-            &&data[i].high>data[i+1].high&&data[i].high>data[i+2].high;
-    const fl=data[i].low<data[i-1].low&&data[i].low<data[i-2].low
-            &&data[i].low<data[i+1].low&&data[i].low<data[i+2].low;
+    const fh=data[i].high>data[i-1].high&&data[i].high>data[i-2].high&&data[i].high>data[i+1].high&&data[i].high>data[i+2].high;
+    const fl=data[i].low<data[i-1].low&&data[i].low<data[i-2].low&&data[i].low<data[i+1].low&&data[i].low<data[i+2].low;
     if(isUp&&fh) return i;
     if(!isUp&&fl) return i;
   } return -1;};
 
-  let preIdx=findPre(isUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0), cross),
+  let preIdx=findPre(isUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0),cross),
       postIdx=findPost(cross);
   if(postIdx<0) return;
 
-  const computeTarget=(p,q)=>{const p0=isUp?data[p].low:data[p].high,
-    p1=isUp?data[q].high:data[q].low, r=Math.abs(p1-p0),
+  const computeTarget=(p,q)=>{const p0=isUp?data[p].low:data[p].high,p1=isUp?data[q].high:data[q].low,r=Math.abs(p1-p0),
     lvl=isUp
-      ? {retr:p1-r*0.618,ext127:p1+r*0.27,ext618:p1+r*0.618,ext2618:p1+r*1.618}
-      : {retr:p1+r*0.618,ext127:p1-r*0.27,ext618:p1-r*0.618,ext2618:p1-r*1.618};
+      ?{retr:p1-r*0.618,ext127:p1+r*0.27,ext618:p1+r*0.618,ext2618:p1+r*1.618}
+      :{retr:p1+r*0.618,ext127:p1-r*0.27,ext618:p1-r*0.618,ext2618:p1-r*1.618};
     let touched=false,moved127=false;
     for(let i=q+1;i<data.length;i++){
-      if(isUp){
-        if(data[i].low<=lvl.retr) touched=true;
-        if(data[i].high>=lvl.ext127) moved127=true;
-      } else {
-        if(data[i].high>=lvl.retr) touched=true;
-        if(data[i].low<=lvl.ext127) moved127=true;
-      }
+      if(isUp){ if(data[i].low<=lvl.retr) touched=true; if(data[i].high>=lvl.ext127) moved127=true; }
+      else   { if(data[i].high>=lvl.retr) touched=true; if(data[i].low<=lvl.ext127) moved127=true; }
     }
     return touched?lvl.ext618:(!touched&&!moved127?lvl.ext127:lvl.ext2618);
   };
 
-  let target=computeTarget(preIdx,postIdx),
-      lastClose=data[data.length-1].close;
+  let target=computeTarget(preIdx,postIdx), lastClose=data[data.length-1].close;
   while((isUp&&lastClose>=target)||(!isUp&&lastClose<=target)){
     preIdx=postIdx;
     postIdx=findPost(preIdx);
@@ -245,36 +225,22 @@ function drawFibsOnChart(cid){
   }
 
   if(e._fibLineId) series.removePriceLine(e._fibLineId);
-  const line=series.createPriceLine({
-    price:target, color:'darkgreen', lineWidth:2,
-    axisLabelVisible:true,
-    title:`Fibonacci Target: ${target.toFixed(4)}`
-  });
+  const line=series.createPriceLine({price:target,color:'darkgreen',lineWidth:2,axisLabelVisible:true,title:`Fibonacci Target: ${target.toFixed(4)}`});
   e._fibLineId=line.id;
   if(!e._zoom) e._zoom=chart.addLineSeries({color:'transparent',lineWidth:0});
-  e._zoom.setData([
-    {time:data[0].time,            value:target},
-    {time:data[data.length-1].time,value:target}
-  ]);
+  e._zoom.setData([{time:data[0].time,value:target},{time:data[data.length-1].time,value:target}]);
   e.fibTarget=target;
 }
 
 // ――― 8) drawEMAandProbability ―――
 function drawEMAandProbability(cid){
-  const e=charts[cid];
-  if(!e?.data?.length||!e.emaArr) return false;
-  const lastC=e.data[e.data.length-1].close,
-        lastE=e.emaArr[e.emaArr.length-1],
-        bull=lastC>lastE,
-        id=`${cid}-prob`;
+  const e=charts[cid]; if(!e?.data?.length||!e.emaArr) return false;
+  const lastC=e.data[e.data.length-1].close, lastE=e.emaArr[e.emaArr.length-1], bull=lastC>lastE;
+  const id=`${cid}-prob`;
   let div=document.getElementById(id);
   if(!div){
     div=document.createElement('div'); div.id=id;
-    Object.assign(div.style,{
-      position:'absolute',top:'8px',left:'8px',
-      zIndex:20,fontSize:'16px',fontWeight:'bold',
-      whiteSpace:'pre',pointerEvents:'none'
-    });
+    Object.assign(div.style,{position:'absolute',top:'8px',left:'8px',zIndex:20,fontSize:'16px',fontWeight:'bold',whiteSpace:'pre',pointerEvents:'none'});
     document.getElementById(cid).appendChild(div);
   }
   div.style.color=bull?'green':'red';
@@ -285,27 +251,20 @@ function drawEMAandProbability(cid){
 // ――― 9) drawRSIandSignal ―――
 function drawRSIandSignal(cid,dailyBullish){
   const e=charts[cid]; if(!e?.data?.length) return null;
-  const arr=rsi(e.data.map(d=>d.close),13),
-        val=arr[arr.length-1],
-        valid=arr.filter(v=>v!=null),
-        maVal=sma(valid,14).slice(-1)[0];
+  const arr=rsi(e.data.map(d=>d.close),13), val=arr[arr.length-1], valid=arr.filter(v=>v!=null), maVal=sma(valid,14).slice(-1)[0];
   let text,color,signal=null;
   if(dailyBullish){
-    if(val<50&&val>maVal){ text='Buy Signal confirmed'; color='green'; signal=true; }
-    else                { text='Wait for Buy Signal';   color='gray'; }
+    if(val<50&&val>maVal){text='Buy Signal confirmed';color='green';signal=true;}
+    else{text='Wait for Buy Signal';color='gray';}
   } else {
-    if(val>50&&val<maVal){ text='Sell Signal confirmed';color='red'; signal=false; }
-    else                { text='Wait for Sell Signal';  color='gray'; }
+    if(val>50&&val<maVal){text='Sell Signal confirmed';color='red';signal=false;}
+    else{text='Wait for Sell Signal';color='gray';}
   }
   const id=`${cid}-rsi`;
   let div=document.getElementById(id);
   if(!div){
     div=document.createElement('div'); div.id=id;
-    Object.assign(div.style,{
-      position:'absolute',top:'28px',left:'8px',zIndex:20,
-      fontSize:'16px',fontWeight:'bold',whiteSpace:'pre',
-      pointerEvents:'none'
-    });
+    Object.assign(div.style,{position:'absolute',top:'28px',left:'8px',zIndex:20,fontSize:'16px',fontWeight:'bold',whiteSpace:'pre',pointerEvents:'none'});
     document.getElementById(cid).appendChild(div);
   }
   div.style.color=color;
@@ -318,14 +277,14 @@ async function generateAISummary(){
   const sym=symbolInput.value;
   outPre.textContent=`Loading AI summary for ${sym}…`;
   const bull=drawEMAandProbability('dailyChart'),
-        sig =drawRSIandSignal('hourlyChart',bull),
-        tgt =charts.hourlyChart?.fibTarget??'—';
+        sig=drawRSIandSignal('hourlyChart',bull),
+        tgt=charts.hourlyChart?.fibTarget??'—';
   let avgRet='N/A';
   try {
-    const resp=await axios.get('https://api.twelvedata.com/time_series',{params:{
+    const r=await axios.get('https://api.twelvedata.com/time_series',{params:{
       symbol:sym,interval:'1month',outputsize:60,apikey:API_KEY
     }});
-    let vals=(resp.data.values||[]).slice().reverse();
+    let vals=(r.data.values||[]).slice().reverse();
     if(vals.length>1){
       const rets=[];
       for(let i=1;i<vals.length;i++){
@@ -334,7 +293,7 @@ async function generateAISummary(){
       }
       avgRet=`${(rets.reduce((a,b)=>a+b,0)/rets.length).toFixed(2)}%`;
     }
-  } catch{}  
+  }catch{}
   const prompt=`
 Symbol: ${sym}
 Probability (45‑EMA): ${bull?'Bullish':'Bearish'}
@@ -350,7 +309,7 @@ Write a concise analysis covering:
   try {
     const ai=await axios.post('/api/ai',{prompt});
     outPre.textContent=ai.data.summary||ai.data.text||JSON.stringify(ai.data,null,2);
-  } catch(e){
+  }catch(e){
     outPre.textContent=`❌ AI error: ${e.message}`;
   }
 }
@@ -360,45 +319,39 @@ async function runScanner(){
   scannerTbody.innerHTML='';
   const filter=scannerFilter.value.trim().toUpperCase();
   let list=filter?symbols.filter(s=>s.includes(filter)):symbols.slice();
-  // dedupe
   const seen=new Set();
-  list=list.filter(s=>(!seen.has(s)&&seen.add(s)));
+  list=list.filter(s=>!seen.has(s)&&seen.add(s));
 
   const carry=getPositiveCarryFX();
   let count=0;
   for(const sym of list){
     if(!filter&&count>=20) break;
-
-    await fetchAndDraw(sym,null,'1d','scannerTempDaily');
+    await fetchAndRender(sym,'1d','scannerTempDaily');
     const pb=drawEMAandProbability('scannerTempDaily');
-
-    await fetchAndDraw(sym,null,'1h','scannerTempHourly');
+    await fetchAndRender(sym,'1h','scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T=charts.scannerTempHourly?.fibTarget??'—';
     const sg=drawRSIandSignal('scannerTempHourly',pb);
-
     if(!filter&&sg===null&&pb===false) continue;
 
     let statusText,statusColor;
-    if(sg===true){ statusText='Buy Signal confirmed'; statusColor='green'; }
-    else if(sg===false){ statusText='Sell Signal confirmed'; statusColor='red'; }
-    else { statusText=pb?'Wait for Buy Signal':'Wait for Sell Signal'; statusColor='gray'; }
+    if(sg===true){statusText='Buy Signal confirmed';statusColor='green';}
+    else if(sg===false){statusText='Sell Signal confirmed';statusColor='red';}
+    else{statusText=pb?'Wait for Buy Signal':'Wait for Sell Signal';statusColor='gray';}
 
-    // projected return
     let proj='—';
     if(cryptoSymbols.includes(sym)){
-      const cagr=await getProjectedAnnualReturn(sym);
-      proj=(typeof cagr==='number')?`${(cagr*100).toFixed(2)}%`:'N/A';
+      const c=getProjectedAnnualReturn(sym);
+      proj=(typeof c==='number')?`${(c*100).toFixed(2)}%`:'N/A';
     } else if(equitiesSymbols.includes(sym)||etfSymbols.includes(sym)){
       const bars=charts.scannerTempDaily.data;
       if(bars?.length>1){
         const first=bars[0].close, last=bars[bars.length-1].close;
-        const yrs=(bars[bars.length-1].time - bars[0].time)/(365*24*60*60);
+        const yrs=(bars[bars.length-1].time-bars[0].time)/(365*24*60*60);
         const cagr=Math.pow(last/first,1/yrs)-1;
         proj=`${(cagr*100).toFixed(2)}%`;
       } else proj='N/A';
     }
-
     const tr=document.createElement('tr');
     tr.innerHTML=`
       <td>${sym}</td>
@@ -418,12 +371,8 @@ async function updateDashboard(){
   if(!symbols.includes(sym)) return;
   dailyTitle.textContent=`${sym} — Daily`;
   hourlyTitle.textContent=`${sym} — 1 Hour`;
-  await fetchAndDraw(sym,null,'1d','dailyChart');
-  await fetchAndDraw(sym,null,'1h','hourlyChart');
-  drawFibsOnChart('dailyChart');
-  drawFibsOnChart('hourlyChart');
-  const bull=drawEMAandProbability('dailyChart');
-  drawRSIandSignal('hourlyChart',bull);
+  await fetchAndRender(sym,'1d','dailyChart');
+  await fetchAndRender(sym,'1h','hourlyChart');
   await generateAISummary();
   await runScanner();
 }
@@ -431,19 +380,12 @@ async function updateDashboard(){
 // ――― 13) init ―――
 (async function init(){
   await loadInterestRates();
-  ['scannerTempDaily','scannerTempHourly'].forEach(id=>{
-    if(!document.getElementById(id)){
-      const d=document.createElement('div');
-      d.id=id; d.style.display='none';
-      document.body.appendChild(d);
-    }
-  });
   symbols.forEach(s=>{
     const o=document.createElement('option');
     o.value=s; datalistEl.appendChild(o);
   });
   symbolInput.value=cryptoSymbols[0];
-  symbolInput.addEventListener('input',()=>{ if(symbols.includes(symbolInput.value)) updateDashboard(); });
+  symbolInput.addEventListener('input',updateDashboard);
   aiBtn.addEventListener('click',generateAISummary);
   scannerFilter.addEventListener('input',runScanner);
   updateDashboard();
