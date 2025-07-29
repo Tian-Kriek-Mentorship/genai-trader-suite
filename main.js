@@ -113,7 +113,6 @@ function getPositiveCarryFX(){
 // ――― 5) Projected Annual Return ―――
 async function getProjectedAnnualReturn(sym){
   if(projCache[sym]!==undefined) return projCache[sym];
-
   if(cryptoSymbols.includes(sym)){
     try {
       const r=await axios.get('https://api.binance.com/api/v3/klines',{params:{
@@ -129,7 +128,6 @@ async function getProjectedAnnualReturn(sym){
       projCache[sym]=null; return null;
     }
   }
-
   try {
     const tdSym=toTDSymbol(sym);
     const r=await axios.get('https://api.twelvedata.com/time_series',{params:{
@@ -151,47 +149,37 @@ async function getProjectedAnnualReturn(sym){
 // ――― 6) fetchAndDraw ―――
 async function fetchAndDraw(symbol,_,interval,containerId){
   let data=[];
-
   if(cryptoSymbols.includes(symbol)){
-    // Binance
     try {
       const resp1=await axios.get('https://api.binance.com/api/v3/klines',{params:{
         symbol,interval,limit:1000
       }});
-      let d1=resp1.data.map(k=>({
+      const d1=resp1.data.map(k=>({
         time:k[0]/1000,open:+k[1],high:+k[2],low:+k[3],close:+k[4]
       }));
-      // get extra ~1160 bars for 90 days
       const endTime=d1[0].time*1000;
       const resp2=await axios.get('https://api.binance.com/api/v3/klines',{params:{
         symbol,interval,limit:1160,endTime
       }});
-      let d2=resp2.data.map(k=>({
+      const d2=resp2.data.map(k=>({
         time:k[0]/1000,open:+k[1],high:+k[2],low:+k[3],close:+k[4]
       }));
       data=d2.concat(d1);
-    } catch(e){
-      console.error(`Binance ${symbol}`, e);
-    }
+    } catch(e){ console.error(e); }
   } else {
-    // Twelve Data
     const tdSym=toTDSymbol(symbol), key=`${tdSym}_${interval}`;
-    if(tdCache[key]){
-      data=tdCache[key];
-    } else {
+    if(tdCache[key]) data=tdCache[key];
+    else {
       try {
         const tdInt=interval==='1d'?'1day':'1h';
         const resp=await axios.get('https://api.twelvedata.com/time_series',{params:{
           symbol:tdSym,interval:tdInt,outputsize:2200,apikey:API_KEY
         }});
-        const vals=resp.data.values||[];
-        data=vals.map(v=>({
+        data=resp.data.values.map(v=>({
           time:Math.floor(new Date(v.datetime).getTime()/1000),
           open:+v.open,high:+v.high,low:+v.low,close:+v.close
         })).reverse();
-      } catch(e){
-        console.error(`TD ${tdSym}`, e);
-      }
+      } catch(e){ console.error(e); }
       tdCache[key]=data;
     }
   }
@@ -210,116 +198,90 @@ async function fetchAndDraw(symbol,_,interval,containerId){
 
   // 45‑EMA on daily
   if(interval==='1d'){
-    const closes=data.map(d=>d.close),
-          arr=ema(closes,45),
-          ed=data.map((d,i)=>({time:d.time,value:arr[i]}))
-                 .filter(p=>p.value!=null),
-          emaSer=chart.addLineSeries({color:'orange',lineWidth:2});
+    const arr=ema(data.map(d=>d.close),45);
+    const ed=data.map((d,i)=>({time:d.time,value:arr[i]}))
+                 .filter(p=>p.value!=null);
+    const emaSer=chart.addLineSeries({color:'orange',lineWidth:2});
     emaSer.setData(ed);
     charts[containerId].emaArr=arr;
   }
 
   // 50 & 200 SMA on H1
   if(interval==='1h'){
-    const opens=data.map(d=>d.open),
-          s50=sma(opens,50),
-          s200=sma(opens,200),
-          d50=data.map((d,i)=>({time:d.time,value:s50[i]})).filter(p=>p.value!=null),
-          d200=data.map((d,i)=>({time:d.time,value:s200[i]})).filter(p=>p.value!=null),
-          s50Ser=chart.addLineSeries({color:'blue',lineWidth:2}),
-          s200Ser=chart.addLineSeries({color:'black',lineWidth:2});
-    s50Ser.setData(d50);
-    s200Ser.setData(d200);
+    const opens=data.map(d=>d.open);
+    const s50=sma(opens,50), s200=sma(opens,200);
+    const d50=data.map((d,i)=>({time:d.time,value:s50[i]})).filter(p=>p.value!=null);
+    const d200=data.map((d,i)=>({time:d.time,value:s200[i]})).filter(p=>p.value!=null);
+    const ls50=chart.addLineSeries({color:'blue',lineWidth:2});
+    const ls200=chart.addLineSeries({color:'black',lineWidth:2});
+    ls50.setData(d50); ls200.setData(d200);
     charts[containerId].sma50=s50;
     charts[containerId].sma200=s200;
   }
 }
 
-// ――― 7) drawFibsOnChart (reset on breach) ―――
+// ――― 7) drawFibsOnChart ―――
 function drawFibsOnChart(cid) {
   const e=charts[cid];
   if(!e||!e.data||e.data.length<5) return;
-
   const {chart,series,data}=e;
-  const o=data.map(d=>d.open),
-        m50=sma(o,50), m200=sma(o,200);
+  const o=data.map(d=>d.open);
+  const m50=sma(o,50), m200=sma(o,200);
 
   let lastGC=-1, lastDC=-1;
   for(let i=1;i<o.length;i++){
     if(m50[i]>m200[i]&&m50[i-1]<=m200[i-1]) lastGC=i;
     if(m50[i]<m200[i]&&m50[i-1]>=m200[i-1]) lastDC=i;
   }
-
-  const inUp=lastGC>lastDC;
-  let cross=inUp?lastGC:lastDC;
+  const inUp=lastGC>lastDC, cross=inUp?lastGC:lastDC;
   if(cross<2) return;
 
-  function buildFib(pre,post){
-    const p0=inUp?data[pre].low:data[pre].high,
-          p1=inUp?data[post].high:data[post].low,
-          r=Math.abs(p1-p0),
-          lvl=inUp
-            ? {retr:p1-r*0.618,ext127:p1+r*0.27,ext618:p1+r*0.618,ext2618:p1+r*1.618}
-            : {retr:p1+r*0.618,ext127:p1-r*0.27,ext618:p1-r*0.618,ext2618:p1-r*1.618};
-    let touched=false,moved127=false;
-    for(let j=post+1;j<data.length;j++){
-      if(inUp){
-        if(data[j].low<=lvl.retr) touched=true;
-        if(data[j].high>=lvl.ext127) moved127=true;
-      } else {
-        if(data[j].high>=lvl.retr) touched=true;
-        if(data[j].low<=lvl.ext127) moved127=true;
-      }
+  let pre=cross;
+  const start=inUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0);
+  for(let i=start;i<=cross;i++){
+    if(inUp){
+      if(data[i].low<data[pre].low) pre=i;
+    } else {
+      if(data[i].high>data[pre].high) pre=i;
     }
-    return touched?lvl.ext618:(!touched&&!moved127?lvl.ext127:lvl.ext2618);
   }
 
-  function findSwing(cr,startBack,startFwd){
-    let pre=cr;
-    const sb=startBack>=0?startBack:0;
-    for(let i=sb;i<=cr;i++){
-      if(inUp){
-        if(data[i].low<data[pre].low) pre=i;
-      } else {
-        if(data[i].high>data[pre].high) pre=i;
-      }
-    }
-    let post=-1;
-    for(let i=cr+startFwd;i<data.length-2;i++){
-      const fh=data[i].high>data[i-1].high&&data[i].high>data[i-2].high&&
-               data[i].high>data[i+1].high&&data[i].high>data[i+2].high;
-      const fl=data[i].low<data[i-1].low&&data[i].low<data[i-2].low&&
-               data[i].low<data[i+1].low&&data[i].low<data[i+2].low;
-      if(inUp&&fh){ post=i; break; }
-      if(!inUp&&fl){ post=i; break; }
-    }
-    return post<0?null:{preIdx:pre,postIdx:post};
+  let post=-1;
+  for(let i=cross+2;i<data.length-2;i++){
+    const fh=data[i].high>data[i-1].high&&data[i].high>data[i-2].high&&
+             data[i].high>data[i+1].high&&data[i].high>data[i+2].high;
+    const fl=data[i].low<data[i-1].low&&data[i].low<data[i-2].low&&
+             data[i].low<data[i+1].low&&data[i].low<data[i+2].low;
+    if(inUp&&fh){ post=i; break; }
+    if(!inUp&&fl){ post=i; break; }
   }
+  if(post<0) return;
 
-  // initial fib
-  let swing=findSwing(cross,inUp?lastDC:lastGC,2);
-  if(!swing) return;
-  let target=buildFib(swing.preIdx,swing.postIdx);
+  const p0=inUp?data[pre].low:data[pre].high;
+  const p1=inUp?data[post].high:data[post].low;
+  const r=Math.abs(p1-p0);
+  const lvl=inUp
+    ? {retr:p1-r*0.618,ext127:p1+r*0.27,ext618:p1+r*0.618,ext2618:p1+r*1.618}
+    : {retr:p1+r*0.618,ext127:p1-r*0.27,ext618:p1-r*0.618,ext2618:p1-r*1.618};
 
-  // if in up-mode and price > target, reset
-  if(inUp && data[data.length-1].close>target){
-    const breachBar=data.findIndex(d=>d.close>target);
-    // try find next golden cross after old fractal
-    cross=data.findIndex((_,i)=>
-      i>swing.postIdx && m50[i]>m200[i]&&m50[i-1]<=m200[i-1]
-    );
-    // pick swing after breach
-    const sb=swing.postIdx, sf=breachBar-sb+2;
-    const nswing=findSwing(cross,sb,sf);
-    if(nswing) target=buildFib(nswing.preIdx,nswing.postIdx);
+  let touched=false,moved127=false;
+  for(let i=post+1;i<data.length;i++){
+    if(inUp){
+      if(data[i].low<=lvl.retr) touched=true;
+      if(data[i].high>=lvl.ext127) moved127=true;
+    } else {
+      if(data[i].high>=lvl.retr) touched=true;
+      if(data[i].low<=lvl.ext127) moved127=true;
+    }
   }
+  const target=touched?lvl.ext618:(!touched&&!moved127?lvl.ext127:lvl.ext2618);
 
   series.createPriceLine({
-    price:target,
-    color:'darkgreen',
-    lineWidth:2,
-    axisLabelVisible:true,
-    title:`Fibonacci Target: ${target.toFixed(4)}`
+    price:            target,
+    color:            'darkgreen',
+    lineWidth:        2,
+    axisLabelVisible: true,
+    title:            `Fibonacci Target: ${target.toFixed(4)}`
   });
   e.fibTarget=target;
 
@@ -327,7 +289,7 @@ function drawFibsOnChart(cid) {
     e.zoomSeries=chart.addLineSeries({color:'transparent',lineWidth:0});
   }
   e.zoomSeries.setData([
-    {time:data[0].time,            value:target},
+    {time:data[0].time,          value:target},
     {time:data[data.length-1].time,value:target}
   ]);
 }
@@ -361,22 +323,19 @@ function drawRSIandSignal(cid,dailyBullish){
   const e=charts[cid];
   if(!e||!e.data) return null;
   if(dailyBullish){
-    if(e.fibDirection==='down'){
-      _renderRSIDiv(cid,'Wait for Buy Signal','gray');return null;
-    }
     const arr=rsi(e.data.map(d=>d.close),13),
           val=arr[arr.length-1],
           valid=arr.filter(v=>v!=null),
           maVal=sma(valid,14).slice(-1)[0];
     if(val<50&&val>maVal){
-      _renderRSIDiv(cid,'Buy Signal confirmed','green',val);return true;
+      _renderRSIDiv(cid,'Buy Signal confirmed','green',val);
+      return true;
     }
-    _renderRSIDiv(cid,'Wait for Buy Signal','gray',val);return null;
+    _renderRSIDiv(cid,'Wait for Buy Signal','gray',val);
+    return null;
   }
-  if(e.fibDirection==='up'){
-    _renderRSIDiv(cid,'Wait for Sell Signal','gray');return null;
-  }
-  _renderRSIDiv(cid,'Sell Signal confirmed','red');return false;
+  _renderRSIDiv(cid,'Sell Signal confirmed','red');
+  return false;
 }
 function _renderRSIDiv(cid,text,color,val){
   const id=`${cid}-rsi`;
@@ -413,15 +372,12 @@ async function generateAISummary(){
       const p=parseFloat(vals[i-1].close),c=parseFloat(vals[i].close);
       rets.push((c/p-1)*100);
     }
-    const avg=rets.reduce((a,b)=>a+b,0)/rets.length;
-    avgRet=`${avg.toFixed(2)}%`;
-  }catch(e){console.error('Monthly error',e);}
+    avgRet=`${(rets.reduce((a,b)=>a+b,0)/rets.length).toFixed(2)}%`;
+  }catch(e){ console.error(e); }
   const prompt=`
 Symbol: ${sym}
 Probability (45‑EMA): ${bull?'Bullish':'Bearish'}
-H1 Signal: ${ sig===true?'Buy Signal confirmed'
-               : sig===false?'Sell Signal confirmed'
-                              :'Wait for signal' }
+H1 Signal: ${sig===true?'Buy Signal confirmed':sig===false?'Sell Signal confirmed':'Wait for signal'}
 Fibonacci Target: ${tgt!=null?tgt.toFixed(4):'—'}
 Average monthly return (last 5 years): ${avgRet}
 
@@ -434,7 +390,7 @@ Write a concise analysis covering:
     const ai=await axios.post('/api/ai',{prompt});
     outPre.textContent=ai.data.summary||ai.data.text||JSON.stringify(ai.data,null,2);
   }catch(e){
-    console.error('AI error',e);
+    console.error(e);
     outPre.textContent=`❌ AI error: ${e.message}`;
   }
 }
@@ -458,7 +414,7 @@ async function runScanner(){
     let st,sc;
     if(sg===true){ st='Buy Signal confirmed'; sc='green'; }
     else if(sg===false){ st='Sell Signal confirmed'; sc='red'; }
-    else                    { st='Wait for signal';      sc='gray'; }
+    else               { st='Wait for signal';      sc='gray';}
     let proj='—';
     if(
       cryptoSymbols.includes(sym) ||
@@ -472,9 +428,7 @@ async function runScanner(){
     const tr=document.createElement('tr');
     tr.innerHTML=`
       <td>${sym}</td>
-      <td style="color:${pb?'green':'red'}">
-        ${pb?'Bullish':'Bearish'}
-      </td>
+      <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
       <td style="color:${sc}">${st}</td>
       <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
       <td style="text-align:right;">${proj}</td>
@@ -504,11 +458,9 @@ async function updateDashboard(){
 (async function init(){
   await loadInterestRates();
   ['scannerTempDaily','scannerTempHourly'].forEach(id=>{
-    if(!document.getElementById(id)){
-      const d=document.createElement('div');
-      d.id=id; d.style.display='none';
-      document.body.appendChild(d);
-    }
+    const d=document.createElement('div');
+    d.id=id; d.style.display='none';
+    document.body.appendChild(d);
   });
   symbols.forEach(s=>{
     const o=document.createElement('option');
