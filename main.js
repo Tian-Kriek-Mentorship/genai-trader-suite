@@ -208,67 +208,88 @@ function drawFibsOnChart(cid) {
   const e = charts[cid];
   if (!e || !e.data || e.data.length < 7) return;
   const { chart, series, data } = e;
-  const opens=data.map(d=>d.open),m50=sma(opens,50),m200=sma(opens,200);
-  let lastGC=-1,lastDC=-1;
-  for(let i=1;i<opens.length;i++){
-    if(m50[i]>m200[i]&&m50[i-1]<=m200[i-1]) lastGC=i;
-    if(m50[i]<m200[i]&&m50[i-1]>=m200[i-1]) lastDC=i;
-  }
-  const isUp=lastGC>lastDC,crossIdx=isUp?lastGC:lastDC;
-  if(crossIdx<2) return;
 
-  const findPre=(start,end)=>{
-    let idx=end;
-    for(let i=start;i<=end;i++){
-      if(isUp?data[i].low<data[idx].low:data[i].high>data[idx].high) idx=i;
+  // 1) Determine direction via 50/200 SMA cross on opens
+  const opens = data.map(d=>d.open);
+  const m50 = sma(opens,50), m200 = sma(opens,200);
+  let lastGC = -1, lastDC = -1;
+  for (let i=1; i<opens.length; i++) {
+    if (m50[i]>m200[i] && m50[i-1]<=m200[i-1]) lastGC = i;
+    if (m50[i]<m200[i] && m50[i-1]>=m200[i-1]) lastDC = i;
+  }
+  const isUp    = lastGC > lastDC;
+  const cross   = isUp ? lastGC : lastDC;
+  if (cross < 2) return;
+
+  // 2) Helpers to find pre/post pivots
+  const findPre = (start, end) => {
+    let idx = end;
+    for (let i=start; i<=end; i++) {
+      if (isUp ? data[i].low  < data[idx].low
+               : data[i].high > data[idx].high) {
+        idx = i;
+      }
     }
     return idx;
   };
-  const findPost=from=>{
-    for(let i=from+2;i<data.length-2;i++){
-      const fh=data[i].high>data[i-1].high&&data[i].high>data[i-2].high
-              &&data[i].high>data[i+1].high&&data[i].high>data[i+2].high;
-      const fl=data[i].low<data[i-1].low&&data[i].low<data[i-2].low
-              &&data[i].low<data[i+1].low&&data[i].low<data[i+2].low;
-      if(isUp&&fh) return i; if(!isUp&&fl) return i;
+  const findPost = from => {
+    for (let i=from+2; i<data.length-2; i++) {
+      const fh = data[i].high>data[i-1].high && data[i].high>data[i-2].high
+              && data[i].high>data[i+1].high && data[i].high>data[i+2].high;
+      const fl = data[i].low <data[i-1].low  && data[i].low <data[i-2].low
+              && data[i].low <data[i+1].low  && data[i].low <data[i+2].low;
+      if (isUp && fh) return i;
+      if (!isUp && fl) return i;
     }
     return -1;
   };
 
-  let startIdx=isUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0);
-  let preIdx=findPre(startIdx,crossIdx), postIdx=findPost(crossIdx);
-  if(postIdx<0) return;
+  // 3) Initial pivots
+  const startIdx = isUp
+    ? (lastDC>0 ? lastDC : 0)
+    : (lastGC>0 ? lastGC : 0);
+  let preIdx  = findPre(startIdx, cross);
+  let postIdx = findPost(cross);
+  if (postIdx < 0) return;
 
-  const computeTarget=(pIdx,qIdx)=>{
-    const p0=isUp?data[pIdx].low:data[pIdx].high,
-          p1=isUp?data[qIdx].high:data[qIdx].low,
-          r=Math.abs(p1-p0),
-          lvl=isUp
-           ? {retr:p1-r*0.618,ext127:p1+r*0.27,ext618:p1+r*0.618,ext2618:p1+r*1.618}
-           : {retr:p1+r*0.618,ext127:p1-r*0.27,ext618:p1-r*0.618,ext2618:p1-r*1.618};
-    let touched=false,moved127=false;
-    for(let i=qIdx+1;i<data.length;i++){
-      if(isUp){
-        if(data[i].low<=lvl.retr) touched=true;
-        if(data[i].high>=lvl.ext127) moved127=true;
+  // 4) Compute target function
+  const computeTarget = (pIdx, qIdx) => {
+    const p0 = isUp ? data[pIdx].low  : data[pIdx].high;
+    const p1 = isUp ? data[qIdx].high : data[qIdx].low;
+    const range = Math.abs(p1 - p0);
+    const lvl = isUp
+      ? { retr: p1 - 0.618*range, ext127: p1 + 0.27*range, ext618: p1 + 0.618*range, ext2618: p1 + 1.618*range }
+      : { retr: p1 + 0.618*range, ext127: p1 - 0.27*range, ext618: p1 - 0.618*range, ext2618: p1 - 1.618*range };
+    // decide which extension
+    let touched = false, moved127 = false;
+    for (let i=qIdx+1; i<data.length; i++) {
+      if (isUp) {
+        if (data[i].low  <= lvl.retr)  touched = true;
+        if (data[i].high >= lvl.ext127) moved127 = true;
       } else {
-        if(data[i].high>=lvl.retr) touched=true;
-        if(data[i].low<=lvl.ext127) moved127=true;
+        if (data[i].high >= lvl.retr)  touched = true;
+        if (data[i].low  <= lvl.ext127) moved127 = true;
       }
     }
-    return touched?lvl.ext618:(!touched&&!moved127?lvl.ext127:lvl.ext2618);
+    return touched
+      ? lvl.ext618
+      : (!touched && !moved127)
+        ? lvl.ext127
+        : lvl.ext2618;
   };
 
-  let target=computeTarget(preIdx,postIdx);
-  const lastClose=data[data.length-1].close;
-  if((isUp&&lastClose>=target)||(!isUp&&lastClose<=target)){
-    const newPre=postIdx, newPost=findPost(newPre);
-    if(newPost>=0){
-      preIdx=newPre; postIdx=newPost;
-      target=computeTarget(preIdx,postIdx);
-    }
+  // 5) Roll forward while last close has taken the current target
+  let target = computeTarget(preIdx, postIdx);
+  const lastClose = data[data.length-1].close;
+  while ((isUp && lastClose >= target) || (!isUp && lastClose <= target)) {
+    // shift pivots forward
+    preIdx  = postIdx;
+    postIdx = findPost(preIdx);
+    if (postIdx < 0) break;
+    target = computeTarget(preIdx, postIdx);
   }
 
+  // 6) Remove old line (if any), draw new
   if (e._fibLineId) {
     series.removePriceLine(e._fibLineId);
   }
@@ -280,12 +301,16 @@ function drawFibsOnChart(cid) {
     title:            `Fibonacci Target: ${target.toFixed(4)}`
   });
   e._fibLineId = line.id;
-  if(!e._zoom) e._zoom=chart.addLineSeries({color:'transparent',lineWidth:0});
+
+  // 7) Extend chart scale so target is visible
+  if (!e._zoom) {
+    e._zoom = chart.addLineSeries({ color:'transparent', lineWidth:0 });
+  }
   e._zoom.setData([
-    {time:data[0].time,            value:target},
-    {time:data[data.length-1].time,value:target}
+    { time: data[0].time,             value: target },
+    { time: data[data.length-1].time, value: target }
   ]);
-  e.fibTarget=target;
+  e.fibTarget = target;
 }
 
 // ――― 8) drawEMAandProbability ―――
