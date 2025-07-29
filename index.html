@@ -67,9 +67,7 @@
   <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
 
   <div style="margin-bottom: 1rem;">
-    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">
-      Select Symbol:
-    </label>
+    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">Select Symbol:</label>
     <select id="symbolSelect"></select>
   </div>
 
@@ -99,7 +97,7 @@
   </table>
 
   <div class="explanation">
-    <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
+    <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
     <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
     <p>Instead of watching dozens of charts or guessing when to trade, this dashboard shows you how Bitcoin (BTCUSDT) is behaving across two key timeframes:</p>
     <ul>
@@ -128,12 +126,12 @@
     </ul>
   </div>
 
-  <!-- global libs -->
+  <!-- load globals -->
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-  <!-- your Twelve Data key -->
+  <!-- inject your Twelve Data key -->
   <script>window.TD_API_KEY = '1eed79e08f4a4d6092a9b4e634c3bbf8';</script>
-  <!-- application -->
+  <!-- load the app -->
   <script type="module" src="/main.js"></script>
 </body>
 </html>
