@@ -53,7 +53,7 @@ function toTDSymbol(sym) {
   if (cryptoSymbols.includes(sym))      return null;
   if (forexSymbols.includes(sym))       return `${sym.slice(0,3)}/${sym.slice(3)}`;
   if (equitiesSymbols.includes(sym) ||
-      etfSymbols.includes(sym))         return `${sym}.US`;
+      etfSymbols.includes(sym))         return `${sym};
   return sym;
 }
 
