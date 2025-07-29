@@ -383,43 +383,71 @@ Write a concise analysis covering:
 
 // ――― 11) Scanner ―――
 async function runScanner(){
-  scannerTbody.innerHTML='';
-  const filter=scannerFilter.value.trim().toUpperCase();
-  const list=filter?symbols.filter(s=>s.includes(filter)):symbols;
-  const carry=getPositiveCarryFX(); let count=0;
-  for(const sym of list){
-    if(!filter&&count>=20) break;
-    await fetchAndDraw(sym,null,'1d','scannerTempDaily');
-    const pb=drawEMAandProbability('scannerTempDaily');
-    await fetchAndDraw(sym,null,'1h','scannerTempHourly');
+  scannerTbody.innerHTML = '';
+  const filter = scannerFilter.value.trim().toUpperCase();
+  const list   = filter
+    ? symbols.filter(s => s.includes(filter))
+    : symbols;
+
+  let count = 0;
+  for (const sym of list) {
+    if (!filter && count >= 20) break;
+
+    // daily scan
+    await fetchAndDraw(sym, null, '1d', 'scannerTempDaily');
+    const pb = drawEMAandProbability('scannerTempDaily');
+
+    // hourly scan
+    await fetchAndDraw(sym, null, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
-    const h1T=charts.scannerTempHourly?.fibTarget??'—';
-    const sg=drawRSIandSignal('scannerTempHourly',pb);
-    if(!filter&&sg===null) continue;
-    let st,sc;
-    if(sg===true){ st='Buy Signal confirmed';  sc='green'; }
-    else if(sg===false){ st='Sell Signal confirmed'; sc='red'; }
-    else { st='Wait for signal'; sc='gray'; }
-    let proj='—';
-    if(cryptoSymbols.includes(sym)||
-       equitiesSymbols.includes(sym)||
-       etfSymbols.includes(sym)   ||
-       carry.includes(sym)){
-      const cagr=await getProjectedAnnualReturn(sym);
-      proj=cagr!=null?`${(cagr*100).toFixed(2)}%`:'N/A';
+    const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
+    const sg  = drawRSIandSignal('scannerTempHourly', pb);
+
+    // **only** skip when daily is Bullish **and** there's no Buy signal
+    if (!filter && sg === null && pb === false) {
+      // pb===false means daily is Bearish, sg===null means no Sell signal yet → skip
+      continue;
     }
-    const tr=document.createElement('tr');
-    tr.innerHTML=`
+
+    // build row
+    let statusColor, statusText;
+    if (sg === true) {
+      statusText  = 'Buy Signal confirmed';
+      statusColor = 'green';
+    } else if (sg === false) {
+      statusText  = 'Sell Signal confirmed';
+      statusColor = 'red';
+    } else {
+      // this is your "Wait for Buy Signal" _or_ "Wait for Sell Signal"
+      statusText  = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal';
+      statusColor = 'gray';
+    }
+
+    // projected return logic…
+    let proj = '—';
+    if (
+      cryptoSymbols.includes(sym) ||
+      equitiesSymbols.includes(sym) ||
+      etfSymbols.includes(sym) ||
+      getPositiveCarryFX().includes(sym)
+    ) {
+      const cagr = await getProjectedAnnualReturn(sym);
+      proj = cagr != null ? `${(cagr*100).toFixed(2)}%` : 'N/A';
+    }
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
       <td>${sym}</td>
       <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
-      <td style="color:${sc}">${st}</td>
-      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
+      <td style="color:${statusColor}">${statusText}</td>
+      <td>${typeof h1T==='number' ? h1T.toFixed(4) : h1T}</td>
       <td style="text-align:right;">${proj}</td>
     `;
     scannerTbody.append(tr);
     count++;
   }
 }
+
 
 // ――― 12) Update Dashboard ―――
 async function updateDashboard(){
