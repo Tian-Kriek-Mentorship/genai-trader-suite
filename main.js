@@ -1,56 +1,35 @@
-// main.js
-
-// ――― 0) Shared localStorage Cache (30 min) ―――
-const CACHE_KEY = 'gtm_cache';
-const CACHE_TTL = 30 * 60 * 1000;
-function loadCache() {
-  try {
-    const s = localStorage.getItem(CACHE_KEY);
-    if (!s) return {};
-    const o = JSON.parse(s);
-    if (Date.now() - o.ts > CACHE_TTL) {
-      localStorage.removeItem(CACHE_KEY);
-      return {};
-    }
-    return o.data || {};
-  } catch {
-    return {};
-  }
-}
-function saveCache(data) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-  } catch {}
-}
-
-// ――― 0.5) Rate‑limit detection & banner ―――
-let rateLimited = false;
-axios.interceptors.response.use(
-  res => res,
-  err => {
-    if (err.response?.status === 429 && !rateLimited) {
-      rateLimited = true;
-      const b = document.getElementById('rateLimitBanner');
-      if (b) b.style.display = 'block';
-    }
-    return Promise.reject(err);
-  }
-);
-
 // ――― 1) Config & State ―――
-const API_KEY = import.meta.env.VITE_TWELVEDATA_API_KEY;
-console.log('TwelveData API_KEY →', API_KEY);
+// read your key from the global window object
+const API_KEY = window.TD_API_KEY;
+console.log('🚀 TD API key is:', API_KEY);
 
-
-// ――― 1) Config & State ―――
-const cryptoSymbols   = ['BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT','SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'];
-const forexSymbols    = ['EURUSD','USDJPY','GBPUSD','USDCHF','USDCAD','AUDUSD','NZDUSD','EURGBP','EURJPY','EURCHF','EURCAD','EURNZD','GBPJPY','GBPCHF','GBPAUD','GBPCAD','GBPNZD','AUDJPY','AUDCAD','AUDCHF','AUDNZD','CADJPY','CADCHF','CADNZD','CHFJPY','NZDJPY','NZDCHF'];
-const equitiesSymbols = ['AAPL','MSFT','NVDA','GOOG','META','AMZN','TSLA','BRK.B','UNH','JPM','V','MA','PG','HD','JNJ','BAC','PFE','CVX','XOM','KO'];
+const cryptoSymbols   = [
+  'BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT',
+  'SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'
+];
+const forexSymbols    = [
+  'EURUSD','USDJPY','GBPUSD','USDCHF','USDCAD','AUDUSD','NZDUSD',
+  'EURGBP','EURJPY','EURCHF','EURCAD','EURNZD',
+  'GBPJPY','GBPCHF','GBPAUD','GBPCAD','GBPNZD',
+  'AUDJPY','AUDCAD','AUDCHF','AUDNZD',
+  'CADJPY','CADCHF','CADNZD',
+  'CHFJPY','NZDJPY','NZDCHF'
+];
+const equitiesSymbols = [
+  'AAPL','MSFT','NVDA','GOOG','META','AMZN','TSLA','BRK.B','UNH','JPM',
+  'V','MA','PG','HD','JNJ','BAC','PFE','CVX','XOM','KO'
+];
 const etfSymbols      = ['BITO','BLOK','BTF','IBIT','FBTC','GBTC','ETHE'];
-const symbols         = [...cryptoSymbols, ...forexSymbols, ...equitiesSymbols, ...etfSymbols];
+const symbols         = [
+  ...cryptoSymbols,
+  ...forexSymbols,
+  ...equitiesSymbols,
+  ...etfSymbols
+];
 const projCache       = {};
 let interestRates     = {};
 const charts          = {};
+
 
 // ――― 2) DOM refs ―――
 const symbolInput   = document.getElementById('symbolInput');
