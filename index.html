@@ -71,9 +71,7 @@
       Select Symbol:
     </label>
     <input list="symbolOptions" id="symbolInput" placeholder="Search symbol…" />
-    <datalist id="symbolOptions">
-      <!-- options injected by main.js -->
-    </datalist>
+    <datalist id="symbolOptions"></datalist>
   </div>
 
   <div>
@@ -117,32 +115,12 @@
     </ul>
     <p><strong>The goal?</strong><br>
     To spot shifts in momentum and liquidity – so you trade with the market, not against it.</p>
-
-    <h4>Why It’s Called “Liquidity‑Cycle”</h4>
-    <p>In every market, price moves in cycles – from accumulation to expansion, then slowdown and reversal. These cycles are driven by liquidity (where the money is). This dashboard makes it easier to:</p>
-    <ul>
-      <li>✅ See when buyers/sellers are taking control</li>
-      <li>✅ Time entries during expansions, not chop</li>
-      <li>✅ Avoid trades when liquidity dries up</li>
-    </ul>
-
-    <h4>What’s “v0.1”?</h4>
-    <p>This is the first public version, focused only on BTC/USDT.<br>
-    Future updates will include:</p>
-    <ul>
-      <li>📊 Trend strength indicators</li>
-      <li>📈 Volume + momentum overlays</li>
-      <li>🌍 Asset switching (FX, STK, ETF, etc.)</li>
-      <li>🧠 AI summaries and alerts</li>
-    </ul>
+    <!-- etc. -->
   </div>
 
-  <!-- libraries -->
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-  <!-- inject your Twelve Data key -->
   <script>window.TD_API_KEY = '1eed79e08f4a4d6092a9b4e634c3bbf8';</script>
-  <!-- main application -->
   <script type="module" src="/main.js"></script>
 </body>
 </html>
