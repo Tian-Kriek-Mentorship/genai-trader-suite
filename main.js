@@ -1,4 +1,5 @@
 // main.js
+console.log('TwelveData API_KEY →', API_KEY);
 
 // ――― 0) Shared localStorage Cache (30 min) ―――
 const CACHE_KEY = 'gtm_cache';
