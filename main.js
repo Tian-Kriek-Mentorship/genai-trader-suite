@@ -1,41 +1,46 @@
 // main.js
 
-// ――― 0) Caching Layer ―――
-const CACHE = {};                     // { key: { ts: timestamp_ms, data: [...] } }
-const TTL_MS = 30 * 60 * 1000;        // 30 minutes
-function isStale(entry) {
-  return !entry || (Date.now() - entry.ts) > TTL_MS;
+import axios from 'axios';
+import { createChart } from 'lightweight-charts';
+
+// ――― 0) Shared localStorage Cache (30 min) ―――
+const SHARED_CACHE_KEY = 'genai_trader_suite_cache';
+const SHARED_CACHE_TTL = 30 * 60 * 1000;  // 30 minutes
+
+function loadSharedCache() {
+  try {
+    const raw = localStorage.getItem(SHARED_CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (Date.now() - obj.ts > SHARED_CACHE_TTL) {
+      localStorage.removeItem(SHARED_CACHE_KEY);
+      return null;
+    }
+    return obj.data;
+  } catch {
+    return null;
+  }
+}
+
+function saveSharedCache(data) {
+  try {
+    localStorage.setItem(
+      SHARED_CACHE_KEY,
+      JSON.stringify({ ts: Date.now(), data })
+    );
+  } catch {}
 }
 
 // ――― 1) Config & State ―――
-const cryptoSymbols = [
-  'BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT',
-  'SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'
-];
-const forexSymbols = [
-  'EURUSD','USDJPY','GBPUSD','USDCHF','USDCAD','AUDUSD','NZDUSD',
-  'EURGBP','EURJPY','EURCHF','EURCAD','EURNZD',
-  'GBPJPY','GBPCHF','GBPAUD','GBPCAD','GBPNZD',
-  'AUDJPY','AUDCAD','AUDCHF','AUDNZD',
-  'CADJPY','CADCHF','CADNZD',
-  'CHFJPY','NZDJPY','NZDCHF'
-];
-const equitiesSymbols = [
-  'AAPL','MSFT','NVDA','GOOG','META','AMZN','TSLA','BRK.B','UNH','JPM',
-  'V','MA','PG','HD','JNJ','BAC','PFE','CVX','XOM','KO'
-];
-const etfSymbols = ['BITO','BLOK','BTF','IBIT','FBTC','GBTC','ETHE'];
-const symbols = [
-  ...cryptoSymbols,
-  ...forexSymbols,
-  ...equitiesSymbols,
-  ...etfSymbols
-];
-
-const API_KEY   = window.TD_API_KEY;
-const projCache = {};
-let interestRates = {};
-const charts    = {};
+const cryptoSymbols   = ['BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT','SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'];
+const forexSymbols    = ['EURUSD','USDJPY','GBPUSD','USDCHF','USDCAD','AUDUSD','NZDUSD','EURGBP','EURJPY','EURCHF','EURCAD','EURNZD','GBPJPY','GBPCHF','GBPAUD','GBPCAD','GBPNZD','AUDJPY','AUDCAD','AUDCHF','AUDNZD','CADJPY','CADCHF','CADNZD','CHFJPY','NZDJPY','NZDCHF'];
+const equitiesSymbols = ['AAPL','MSFT','NVDA','GOOG','META','AMZN','TSLA','BRK.B','UNH','JPM','V','MA','PG','HD','JNJ','BAC','PFE','CVX','XOM','KO'];
+const etfSymbols      = ['BITO','BLOK','BTF','IBIT','FBTC','GBTC','ETHE'];
+const symbols         = [...cryptoSymbols, ...forexSymbols, ...equitiesSymbols, ...etfSymbols];
+const API_KEY         = window.TD_API_KEY;
+const projCache       = {};
+let interestRates     = {};
+const charts          = {};
 
 // ――― 2) DOM refs ―――
 const symbolInput   = document.getElementById('symbolInput');
@@ -47,39 +52,26 @@ const outPre        = document.getElementById('out');
 const scannerFilter = document.getElementById('scannerFilter');
 const scannerTbody  = document.querySelector('#scannerTable tbody');
 
-// ――― 3) Helpers ―――
-function toTDSymbol(sym) {
-  if (cryptoSymbols.includes(sym))      return null;
-  if (forexSymbols.includes(sym))       return `${sym.slice(0,3)}/${sym.slice(3)}`;
-  return sym;
-}
-
-function ema(arr,p){
-  const k=2/(p+1), out=[], n=arr.length; let prev;
+// ――― 3) Math Helpers ―――
+function ema(arr,p){ const k=2/(p+1), out=[], n=arr.length; let prev;
   for(let i=0;i<n;i++){
-    if(i===p-1){
-      prev=arr.slice(0,p).reduce((a,b)=>a+b,0)/p;
-      out[i]=prev;
-    } else if(i>=p){
-      prev=arr[i]*k + prev*(1-k);
-      out[i]=prev;
-    } else out[i]=null;
+    if(i===p-1){ prev=arr.slice(0,p).reduce((a,b)=>a+b,0)/p; out[i]=prev; }
+    else if(i>=p){ prev=arr[i]*k+prev*(1-k); out[i]=prev; }
+    else out[i]=null;
   }
   return out;
 }
 
-function sma(arr,p){
-  const out=[];
+function sma(arr,p){ const out=[];
   for(let i=0;i<arr.length;i++){
     if(i<p-1){ out.push(null); continue; }
-    let sum=0; for(let j=i-p+1;j<=i;j++) sum+=arr[j];
-    out.push(sum/p);
+    let s=0; for(let j=i-p+1;j<=i;j++) s+=arr[j];
+    out.push(s/p);
   }
   return out;
 }
 
-function rsi(arr,p){
-  const gains=[], losses=[], out=[];
+function rsi(arr,p){ const gains=[], losses=[], out=[];
   for(let i=1;i<arr.length;i++){
     const d=arr[i]-arr[i-1];
     gains.push(d>0?d:0);
@@ -87,92 +79,101 @@ function rsi(arr,p){
   }
   let avgG=gains.slice(0,p).reduce((a,b)=>a+b,0)/p;
   let avgL=losses.slice(0,p).reduce((a,b)=>a+b,0)/p;
-  out[p]=100 - 100/(1+avgG/avgL);
+  out[p]=100-100/(1+avgG/avgL);
   for(let i=p+1;i<arr.length;i++){
     avgG=(avgG*(p-1)+gains[i-1])/p;
     avgL=(avgL*(p-1)+losses[i-1])/p;
-    out[i]=100 - 100/(1+avgG/avgL);
+    out[i]=100-100/(1+avgG/avgL);
   }
   return out;
 }
 
-// ――― 4) Load interest rates ―――
+// ――― 4) Helpers & Interest Rates ―――
+function toTDSymbol(sym){
+  if(cryptoSymbols.includes(sym)) return null;
+  if(forexSymbols.includes(sym)) return `${sym.slice(0,3)}/${sym.slice(3)}`;
+  return sym;
+}
+
 async function loadInterestRates(){
   try {
-    const resp = await fetch('/interestRates.json');
-    interestRates = await resp.json();
-  } catch(e){
-    interestRates = {};
-  }
+    const r=await fetch('/interestRates.json');
+    interestRates=await r.json();
+  } catch { interestRates={}; }
 }
+
 function getPositiveCarryFX(){
   return forexSymbols.filter(sym=>{
     const b=sym.slice(0,3), q=sym.slice(3);
-    return interestRates[b] > interestRates[q];
+    return (interestRates[b]||0) > (interestRates[q]||0);
   });
 }
 
 // ――― 5) Projected Annual Return ―――
 async function getProjectedAnnualReturn(sym){
-  if (projCache[sym] !== undefined) return projCache[sym];
-
-  // crypto via Binance
-  if (cryptoSymbols.includes(sym)) {
+  if(projCache[sym]!==undefined) return projCache[sym];
+  if(cryptoSymbols.includes(sym)){
+    const sc=loadSharedCache()||{};
+    if(sc[sym]?.proj!=null){
+      return projCache[sym]=sc[sym].proj;
+    }
     try {
-      const r = await axios.get('https://api.binance.com/api/v3/klines',{
+      const resp=await axios.get('https://api.binance.com/api/v3/klines',{
         params:{symbol:sym,interval:'1M',limit:60}
       });
-      const d=r.data;
+      const d=resp.data;
       const first=parseFloat(d[0][4]), last=parseFloat(d[d.length-1][4]);
       const yrs=(d.length-1)/12, cagr=Math.pow(last/first,1/yrs)-1;
+      sc[sym]=sc[sym]||{};
+      sc[sym].proj=cagr;
+      saveSharedCache(sc);
       return projCache[sym]=cagr;
-    } catch(e){
+    } catch {
       return projCache[sym]=null;
     }
   }
-
-  // others fallback
   return projCache[sym]=null;
 }
 
-// ――― 6) fetchAndDraw ―――
+// ――― 6) fetchAndDraw (with shared cache) ―――
 async function fetchAndDraw(symbol,_,interval,containerId){
-  let data=[];
-  const key=`${symbol}_${interval}`;
-
-  if (cryptoSymbols.includes(symbol)) {
-    if (!isStale(CACHE[key])) {
-      data=CACHE[key].data;
-    } else {
-      const resp=await axios.get('https://api.binance.com/api/v3/klines',{
-        params:{symbol,interval,limit:1000}
-      });
-      data=resp.data.map(k=>({
-        time:k[0]/1000,open:+k[1],high:+k[2],
-        low:+k[3],close:+k[4]
-      }));
-      CACHE[key]={ts:Date.now(),data};
-    }
-  } else {
-    if (!isStale(CACHE[key])) {
-      data=CACHE[key].data;
-    } else {
-      const tdSym=toTDSymbol(symbol), tdInt=interval==='1d'?'1day':'1h';
-      const resp=await axios.get('https://api.twelvedata.com/time_series',{
-        params:{symbol:tdSym,interval:tdInt,outputsize:2200,apikey:API_KEY}
-      });
-      const vals=resp.data.values||[];
-      data=vals.map(v=>({
-        time:Math.floor(new Date(v.datetime).getTime()/1000),
-        open:+v.open,high:+v.high,low:+v.low,close:+v.close
-      })).reverse();
-      CACHE[key]={ts:Date.now(),data};
-    }
+  const sc=loadSharedCache()||{};
+  const key=interval;
+  if(sc[symbol]?.[key]){
+    renderChart(containerId, sc[symbol][key]);
+    return;
   }
 
+  let data=[];
+  if(cryptoSymbols.includes(symbol)){
+    const r=await axios.get('https://api.binance.com/api/v3/klines',{
+      params:{symbol,interval,limit:1000}
+    });
+    data=r.data.map(k=>({
+      time:k[0]/1000, open:+k[1], high:+k[2], low:+k[3], close:+k[4]
+    }));
+  } else {
+    const td=toTDSymbol(symbol), tdInt=interval==='1d'?'1day':'1h';
+    const r=await axios.get('https://api.twelvedata.com/time_series',{
+      params:{symbol:td,interval:tdInt,outputsize:2200,apikey:API_KEY}
+    });
+    const vals=r.data.values||[];
+    data=vals.map(v=>({
+      time:Math.floor(new Date(v.datetime).getTime()/1000),
+      open:+v.open, high:+v.high, low:+v.low, close:+v.close
+    })).reverse();
+  }
+
+  sc[symbol]=sc[symbol]||{};
+  sc[symbol][key]=data;
+  saveSharedCache(sc);
+  renderChart(containerId, data);
+}
+
+function renderChart(containerId, data){
   const c=document.getElementById(containerId);
   c.innerHTML='';
-  const chart=LightweightCharts.createChart(c,{
+  const chart=createChart(c,{
     layout:{textColor:'#000'},
     rightPriceScale:{scaleMargins:{top:0.3,bottom:0.1}},
     timeScale:{timeVisible:true,secondsVisible:false}
@@ -180,31 +181,11 @@ async function fetchAndDraw(symbol,_,interval,containerId){
   const series=chart.addCandlestickSeries();
   series.setData(data);
   charts[containerId]={chart,series,data};
-
-  if (interval==='1d') {
-    const arr=ema(data.map(d=>d.close),45),
-          ed=data.map((d,i)=>({time:d.time,value:arr[i]}))
-                 .filter(p=>p.value!=null);
-    chart.addLineSeries({color:'orange',lineWidth:2}).setData(ed);
-    charts[containerId].emaArr=arr;
-  }
-  if (interval==='1h') {
-    const opens=data.map(d=>d.open),
-          s50=sma(opens,50), s200=sma(opens,200),
-          d50=data.map((d,i)=>({time:d.time,value:s50[i]}))
-                   .filter(p=>p.value!=null),
-          d200=data.map((d,i)=>({time:d.time,value:s200[i]}))
-                    .filter(p=>p.value!=null);
-    chart.addLineSeries({color:'blue',lineWidth:2}).setData(d50);
-    chart.addLineSeries({color:'black',lineWidth:2}).setData(d200);
-    charts[containerId].sma50=s50;
-    charts[containerId].sma200=s200;
-  }
 }
 
 // ――― 7) drawFibsOnChart ―――
 function drawFibsOnChart(cid){
-  const e=charts[cid]; if(!e||!e.data||e.data.length<7) return;
+  const e=charts[cid]; if(!e?.data?.length) return;
   const {chart,series,data}=e;
   const opens=data.map(d=>d.open),
         m50=sma(opens,50), m200=sma(opens,200);
@@ -232,8 +213,7 @@ function drawFibsOnChart(cid){
     if(!isUp&&fl) return i;
   } return -1;};
 
-  let stIdx=isUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0),
-      preIdx=findPre(stIdx,cross),
+  let preIdx=findPre(isUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0), cross),
       postIdx=findPost(cross);
   if(postIdx<0) return;
 
@@ -266,7 +246,7 @@ function drawFibsOnChart(cid){
 
   if(e._fibLineId) series.removePriceLine(e._fibLineId);
   const line=series.createPriceLine({
-    price:target,color:'darkgreen',lineWidth:2,
+    price:target, color:'darkgreen', lineWidth:2,
     axisLabelVisible:true,
     title:`Fibonacci Target: ${target.toFixed(4)}`
   });
@@ -282,16 +262,17 @@ function drawFibsOnChart(cid){
 // ――― 8) drawEMAandProbability ―――
 function drawEMAandProbability(cid){
   const e=charts[cid];
-  if(!e||!e.data||!e.emaArr||!e.emaArr.length) return false;
+  if(!e?.data?.length||!e.emaArr) return false;
   const lastC=e.data[e.data.length-1].close,
         lastE=e.emaArr[e.emaArr.length-1],
-        bull=lastC>lastE, id=`${cid}-prob`;
+        bull=lastC>lastE,
+        id=`${cid}-prob`;
   let div=document.getElementById(id);
   if(!div){
     div=document.createElement('div'); div.id=id;
     Object.assign(div.style,{
       position:'absolute',top:'8px',left:'8px',
-      zIndex:'20',fontSize:'16px',fontWeight:'bold',
+      zIndex:20,fontSize:'16px',fontWeight:'bold',
       whiteSpace:'pre',pointerEvents:'none'
     });
     document.getElementById(cid).appendChild(div);
@@ -303,7 +284,7 @@ function drawEMAandProbability(cid){
 
 // ――― 9) drawRSIandSignal ―――
 function drawRSIandSignal(cid,dailyBullish){
-  const e=charts[cid]; if(!e||!e.data) return null;
+  const e=charts[cid]; if(!e?.data?.length) return null;
   const arr=rsi(e.data.map(d=>d.close),13),
         val=arr[arr.length-1],
         valid=arr.filter(v=>v!=null),
@@ -311,23 +292,23 @@ function drawRSIandSignal(cid,dailyBullish){
   let text,color,signal=null;
   if(dailyBullish){
     if(val<50&&val>maVal){ text='Buy Signal confirmed'; color='green'; signal=true; }
-    else                  { text='Wait for Buy Signal';   color='gray';  }
+    else                { text='Wait for Buy Signal';   color='gray'; }
   } else {
-    if(val>50&&val<maVal){ text='Sell Signal confirmed'; color='red';   signal=false; }
-    else                  { text='Wait for Sell Signal';  color='gray';  }
+    if(val>50&&val<maVal){ text='Sell Signal confirmed';color='red'; signal=false; }
+    else                { text='Wait for Sell Signal';  color='gray'; }
   }
-  const id=`${cid}-rsi}`;
+  const id=`${cid}-rsi`;
   let div=document.getElementById(id);
   if(!div){
     div=document.createElement('div'); div.id=id;
     Object.assign(div.style,{
-      position:'absolute',top:'28px',left:'8px',
-      zIndex:'20',fontSize:'16px',fontWeight:'bold',
-      whiteSpace:'pre',pointerEvents:'none'
+      position:'absolute',top:'28px',left:'8px',zIndex:20,
+      fontSize:'16px',fontWeight:'bold',whiteSpace:'pre',
+      pointerEvents:'none'
     });
     document.getElementById(cid).appendChild(div);
   }
-  div.style=color;
+  div.style.color=color;
   div.textContent=`RSI: ${val.toFixed(2)}\n${text}`;
   return signal;
 }
@@ -341,12 +322,10 @@ async function generateAISummary(){
         tgt =charts.hourlyChart?.fibTarget??'—';
   let avgRet='N/A';
   try {
-    const tdSym=toTDSymbol(sym)||sym;
     const resp=await axios.get('https://api.twelvedata.com/time_series',{params:{
-      symbol:tdSym,interval:'1month',outputsize:60,apikey:API_KEY
+      symbol:sym,interval:'1month',outputsize:60,apikey:API_KEY
     }});
-    let vals=resp.data.values||[];
-    vals=vals.slice().reverse();
+    let vals=(resp.data.values||[]).slice().reverse();
     if(vals.length>1){
       const rets=[];
       for(let i=1;i<vals.length;i++){
@@ -355,7 +334,7 @@ async function generateAISummary(){
       }
       avgRet=`${(rets.reduce((a,b)=>a+b,0)/rets.length).toFixed(2)}%`;
     }
-  } catch(e){}
+  } catch{}  
   const prompt=`
 Symbol: ${sym}
 Probability (45‑EMA): ${bull?'Bullish':'Bearish'}
@@ -376,21 +355,14 @@ Write a concise analysis covering:
   }
 }
 
-// ――― 11) Scanner ―――
+// ――― 11) runScanner ―――
 async function runScanner(){
   scannerTbody.innerHTML='';
   const filter=scannerFilter.value.trim().toUpperCase();
-  let list = filter
-    ? symbols.filter(s=>s.includes(filter))
-    : symbols.slice();
-
+  let list=filter?symbols.filter(s=>s.includes(filter)):symbols.slice();
   // dedupe
   const seen=new Set();
-  list=list.filter(s=>{
-    if(seen.has(s)) return false;
-    seen.add(s);
-    return true;
-  });
+  list=list.filter(s=>(!seen.has(s)&&seen.add(s)));
 
   const carry=getPositiveCarryFX();
   let count=0;
@@ -407,37 +379,24 @@ async function runScanner(){
 
     if(!filter&&sg===null&&pb===false) continue;
 
-    let statusText, statusColor;
-    if(sg===true){
-      statusText='Buy Signal confirmed'; statusColor='green';
-    } else if(sg===false){
-      statusText='Sell Signal confirmed'; statusColor='red';
-    } else {
-      statusText=pb?'Wait for Buy Signal':'Wait for Sell Signal';
-      statusColor='gray';
-    }
+    let statusText,statusColor;
+    if(sg===true){ statusText='Buy Signal confirmed'; statusColor='green'; }
+    else if(sg===false){ statusText='Sell Signal confirmed'; statusColor='red'; }
+    else { statusText=pb?'Wait for Buy Signal':'Wait for Sell Signal'; statusColor='gray'; }
 
     // projected return
     let proj='—';
     if(cryptoSymbols.includes(sym)){
       const cagr=await getProjectedAnnualReturn(sym);
       proj=(typeof cagr==='number')?`${(cagr*100).toFixed(2)}%`:'N/A';
-
     } else if(equitiesSymbols.includes(sym)||etfSymbols.includes(sym)){
-      const bars=charts.scannerTempDaily?.data;
-      if(bars&&bars.length>1){
+      const bars=charts.scannerTempDaily.data;
+      if(bars?.length>1){
         const first=bars[0].close, last=bars[bars.length-1].close;
-        const secs=bars[bars.length-1].time-bars[0].time;
-        const yrs=secs/(365*24*60*60);
+        const yrs=(bars[bars.length-1].time - bars[0].time)/(365*24*60*60);
         const cagr=Math.pow(last/first,1/yrs)-1;
         proj=`${(cagr*100).toFixed(2)}%`;
-      } else {
-        proj='N/A';
-      }
-
-    } else if(carry.includes(sym)){
-      const cagr=await getProjectedAnnualReturn(sym);
-      proj=(typeof cagr==='number')?`${(cagr*100).toFixed(2)}%`:'N/A';
+      } else proj='N/A';
     }
 
     const tr=document.createElement('tr');
@@ -473,19 +432,18 @@ async function updateDashboard(){
 (async function init(){
   await loadInterestRates();
   ['scannerTempDaily','scannerTempHourly'].forEach(id=>{
-    const d=document.createElement('div');
-    d.id=id; d.style.display='none';
-    document.body.appendChild(d);
+    if(!document.getElementById(id)){
+      const d=document.createElement('div');
+      d.id=id; d.style.display='none';
+      document.body.appendChild(d);
+    }
   });
   symbols.forEach(s=>{
     const o=document.createElement('option');
-    o.value=s;
-    datalistEl.appendChild(o);
+    o.value=s; datalistEl.appendChild(o);
   });
   symbolInput.value=cryptoSymbols[0];
-  symbolInput.addEventListener('input',()=>{
-    if(symbols.includes(symbolInput.value)) updateDashboard();
-  });
+  symbolInput.addEventListener('input',()=>{ if(symbols.includes(symbolInput.value)) updateDashboard(); });
   aiBtn.addEventListener('click',generateAISummary);
   scannerFilter.addEventListener('input',runScanner);
   updateDashboard();
