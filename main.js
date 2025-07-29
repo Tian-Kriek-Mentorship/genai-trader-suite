@@ -143,7 +143,9 @@ async function fetchAndRender(symbol, interval, containerId){
   sc[symbol] = sc[symbol]||{};
   let data = sc[symbol][interval];
 
-  if (!data && !rateLimited) {
+  // always fetch crypto (Binance), but gate Twelve Data by rateLimited
+if (!data && (cryptoSymbols.includes(symbol) || !rateLimited)) {
+
     try {
       if (cryptoSymbols.includes(symbol)) {
         const r = await axios.get('https://api.binance.com/api/v3/klines', {
@@ -390,10 +392,11 @@ async function runScanner(){
     else{statusText=pb?'Wait for Buy Signal':'Wait for Sell Signal';statusColor='gray';}
 
     let proj='—';
-    if(cryptoSymbols.includes(sym)){
-      const c=getProjectedAnnualReturn(sym);
-      proj=(typeof c==='number')?`${(c*100).toFixed(2)}%`:'N/A';
-    } else if(equitiesSymbols.includes(sym)||etfSymbols.includes(sym)){
+    if (cryptoSymbols.includes(sym)) {
+  const cagr = await getProjectedAnnualReturn(sym);
+  proj = (typeof cagr === 'number') ? `${(cagr*100).toFixed(2)}%` : 'N/A';
+}
+ else if(equitiesSymbols.includes(sym)||etfSymbols.includes(sym)){
       const bars=charts.scannerTempDaily.data;
       if(bars?.length>1){
         const first=bars[0].close, last=bars[bars.length-1].close;
