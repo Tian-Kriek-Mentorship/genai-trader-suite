@@ -1,8 +1,8 @@
 // main.js
 
 // ――― 0) Caching Layer ―――
-const CACHE = {};                                      // { key: { ts: timestamp_ms, data: [...] } }
-const TTL_MS = 30 * 60 * 1000;                         // 30 minutes
+const CACHE = {};                     // { key: { ts: timestamp_ms, data: [...] } }
+const TTL_MS = 30 * 60 * 1000;        // 30 minutes
 function isStale(entry) {
   return !entry || (Date.now() - entry.ts) > TTL_MS;
 }
@@ -33,7 +33,6 @@ const symbols = [
 ];
 
 const API_KEY   = window.TD_API_KEY;
-const tdCache   = {};
 const projCache = {};
 let interestRates = {};
 const charts    = {};
@@ -50,20 +49,12 @@ const scannerTbody  = document.querySelector('#scannerTable tbody');
 
 // ――― 3) Helpers ―――
 function toTDSymbol(sym) {
-  if (cryptoSymbols.includes(sym)) 
-    return null;
-
-  if (forexSymbols.includes(sym)) 
-    return `${sym.slice(0,3)}/${sym.slice(3)}`;
-
-  // For U.S. stocks and ETFs, just return the ticker:
-  if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) 
-    return sym;
-
-  // Otherwise (if you ever add other asset types), fall back:
+  if (cryptoSymbols.includes(sym))      return null;
+  if (forexSymbols.includes(sym))       return `${sym.slice(0,3)}/${sym.slice(3)}`;
+  if (equitiesSymbols.includes(sym) ||
+      etfSymbols.includes(sym))         return sym;
   return sym;
 }
-
 
 function ema(arr,p){
   const k=2/(p+1), out=[], n=arr.length; let prev;
@@ -115,202 +106,187 @@ async function loadInterestRates(){
     const resp = await fetch('/interestRates.json');
     interestRates = await resp.json();
   } catch(e){
-    console.error('Failed to load interest rates', e);
     interestRates = {};
   }
 }
 function getPositiveCarryFX(){
   return forexSymbols.filter(sym=>{
     const b=sym.slice(0,3), q=sym.slice(3);
-    const rb=interestRates[b], rq=interestRates[q];
-    return typeof rb==='number' && typeof rq==='number' && rb>rq;
+    return interestRates[b] > interestRates[q];
   });
 }
 
 // ――― 5) Projected Annual Return ―――
 async function getProjectedAnnualReturn(sym){
   if(projCache[sym]!==undefined) return projCache[sym];
-
   if(cryptoSymbols.includes(sym)){
     try {
       const r = await axios.get('https://api.binance.com/api/v3/klines',{params:{
         symbol:sym,interval:'1M',limit:60
       }});
       const d = r.data;
-      if(!d.length){ projCache[sym]=null; return null; }
-      const first = parseFloat(d[0][4]);
-      const last  = parseFloat(d[d.length-1][4]);
-      const yrs   = (d.length-1)/12;
-      const cagr  = Math.pow(last/first,1/yrs)-1;
-      projCache[sym]=cagr; return cagr;
-    } catch(e){
-      console.error(`Binance CAGR error ${sym}`, e);
-      projCache[sym]=null; return null;
-    }
+      const first=parseFloat(d[0][4]), last=parseFloat(d[d.length-1][4]);
+      const yrs=(d.length-1)/12, cagr=Math.pow(last/first,1/yrs)-1;
+      return projCache[sym]=cagr;
+    } catch(e){ return projCache[sym]=null; }
   }
-
   try {
-    const tdSym = toTDSymbol(sym);
-    const resp  = await axios.get('https://api.twelvedata.com/time_series',{params:{
+    const tdSym=toTDSymbol(sym);
+    const resp=await axios.get('https://api.twelvedata.com/time_series',{params:{
       symbol:tdSym,interval:'1month',outputsize:60,apikey:API_KEY
     }});
-    let vals = resp.data.values||[];
-    vals = vals.slice().reverse();
-    if(vals.length<2){ projCache[sym]=null; return null; }
-    const first = parseFloat(vals[0].close);
-    const last  = parseFloat(vals[vals.length-1].close);
-    const yrs   = (vals.length-1)/12;
-    const cagr  = Math.pow(last/first,1/yrs)-1;
-    projCache[sym]=cagr; return cagr;
-  } catch(e){
-    console.error(`TD CAGR error ${sym}`, e);
-    projCache[sym]=null; return null;
-  }
+    let vals=resp.data.values||[];
+    vals=vals.slice().reverse();
+    const first=parseFloat(vals[0].close), last=parseFloat(vals[vals.length-1].close);
+    const yrs=(vals.length-1)/12, cagr=Math.pow(last/first,1/yrs)-1;
+    return projCache[sym]=cagr;
+  } catch(e){ return projCache[sym]=null; }
 }
 
 // ――― 6) fetchAndDraw ―――
 async function fetchAndDraw(symbol,_,interval,containerId){
   let data=[];
-
-  const keyFetch = `${symbol}_${interval}`;
-  if(!cryptoSymbols.includes(symbol)){
-    // Twelve Data branch
-    if(!isStale(CACHE[keyFetch])){
-      data = CACHE[keyFetch].data;
+  const key = `${symbol}_${interval}`;
+  if(cryptoSymbols.includes(symbol)){
+    if(!isStale(CACHE[key])){
+      data = CACHE[key].data;
     } else {
-      const tdSym = toTDSymbol(symbol);
-      try {
-        const tdInt = interval==='1d'?'1day':'1h';
-        const resp  = await axios.get('https://api.twelvedata.com/time_series',{params:{
-          symbol:tdSym,interval:tdInt,outputsize:2200,apikey:API_KEY
-        }});
-        const vals = resp.data.values||[];
-        data = vals.map(v=>({
-          time:Math.floor(new Date(v.datetime).getTime()/1000),
-          open:+v.open,high:+v.high,low:+v.low,close:+v.close
-        })).reverse();
-      } catch(e){
-        console.error('Twelve Data fetch error',symbol,e);
-      }
-      CACHE[keyFetch] = { ts: Date.now(), data };
+      const resp = await axios.get('https://api.binance.com/api/v3/klines',{params:{
+        symbol,interval,limit:1000
+      }});
+      data = resp.data.map(k=>({
+        time:k[0]/1000,open:+k[1],high:+k[2],low:+k[3],close:+k[4]
+      }));
+      CACHE[key]={ts:Date.now(),data};
     }
   } else {
-    // Binance branch
-    if(!isStale(CACHE[keyFetch])){
-      data = CACHE[keyFetch].data;
+    if(!isStale(CACHE[key])){
+      data = CACHE[key].data;
     } else {
-      try {
-        const resp = await axios.get('https://api.binance.com/api/v3/klines',{params:{
-          symbol,interval,limit:1000
-        }});
-        data = resp.data.map(k=>({
-          time: k[0]/1000,
-          open:+k[1],high:+k[2],
-          low:+k[3], close:+k[4]
-        }));
-      } catch(e){
-        console.error('Binance fetch error',symbol,e);
-      }
-      CACHE[keyFetch] = { ts: Date.now(), data };
+      const tdSym=toTDSymbol(symbol), tdInt=interval==='1d'?'1day':'1h';
+      const resp=await axios.get('https://api.twelvedata.com/time_series',{params:{
+        symbol:tdSym,interval:tdInt,outputsize:2200,apikey:API_KEY
+      }});
+      const vals=resp.data.values||[];
+      data=vals.map(v=>({
+        time:Math.floor(new Date(v.datetime).getTime()/1000),
+        open:+v.open,high:+v.high,low:+v.low,close:+v.close
+      })).reverse();
+      CACHE[key]={ts:Date.now(),data};
     }
   }
-
-  const container = document.getElementById(containerId);
-  container.innerHTML = '';
-  const chart = LightweightCharts.createChart(container,{
+  const c=document.getElementById(containerId);
+  c.innerHTML='';
+  const chart=LightweightCharts.createChart(c,{
     layout:{textColor:'#000'},
     rightPriceScale:{scaleMargins:{top:0.3,bottom:0.1}},
     timeScale:{timeVisible:true,secondsVisible:false}
   });
-  const series = chart.addCandlestickSeries();
+  const series=chart.addCandlestickSeries();
   series.setData(data);
-  charts[containerId] = {chart,series,data};
+  charts[containerId]={chart,series,data};
 
   if(interval==='1d'){
-    const arr = ema(data.map(d=>d.close),45),
-          ed  = data.map((d,i)=>({time:d.time,value:arr[i]}))
-                    .filter(p=>p.value!=null);
+    const arr=ema(data.map(d=>d.close),45),
+          ed=data.map((d,i)=>({time:d.time,value:arr[i]})).filter(p=>p.value!=null);
     chart.addLineSeries({color:'orange',lineWidth:2}).setData(ed);
-    charts[containerId].emaArr = arr;
+    charts[containerId].emaArr=arr;
   }
   if(interval==='1h'){
-    const opens = data.map(d=>d.open),
-          s50   = sma(opens,50),
-          s200  = sma(opens,200),
-          d50   = data.map((d,i)=>({time:d.time,value:s50[i]}))
-                       .filter(p=>p.value!=null),
-          d200  = data.map((d,i)=>({time:d.time,value:s200[i]}))
-                       .filter(p=>p.value!=null);
+    const opens=data.map(d=>d.open),
+          s50=sma(opens,50),s200=sma(opens,200),
+          d50=data.map((d,i)=>({time:d.time,value:s50[i]})).filter(p=>p.value!=null),
+          d200=data.map((d,i)=>({time:d.time,value:s200[i]})).filter(p=>p.value!=null);
     chart.addLineSeries({color:'blue',lineWidth:2}).setData(d50);
     chart.addLineSeries({color:'black',lineWidth:2}).setData(d200);
-    charts[containerId].sma50  = s50;
-    charts[containerId].sma200 = s200;
+    charts[containerId].sma50=s50;charts[containerId].sma200=s200;
   }
 }
 
-// ――― 7) drawFibsOnChart ―――
+// ――― 7) drawFibsOnChart (auto‑recycle) ―――
 function drawFibsOnChart(cid){
-  const e=charts[cid]; if(!e||!e.data||e.data.length<5) return;
-  const {chart,series,data} = e;
-  const o=data.map(d=>d.open), m50=sma(o,50), m200=sma(o,200);
-  let lastGC=-1, lastDC=-1;
-  for(let i=1;i<o.length;i++){
+  const e=charts[cid]; if(!e||!e.data||e.data.length<7) return;
+  const {chart,series,data}=e;
+  const opens=data.map(d=>d.open),m50=sma(opens,50),m200=sma(opens,200);
+  let lastGC=-1,lastDC=-1;
+  for(let i=1;i<opens.length;i++){
     if(m50[i]>m200[i]&&m50[i-1]<=m200[i-1]) lastGC=i;
     if(m50[i]<m200[i]&&m50[i-1]>=m200[i-1]) lastDC=i;
   }
-  const inUp = lastGC>lastDC, cross = inUp?lastGC:lastDC;
-  if(cross<2) return;
-  let pre=cross, start = inUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0);
-  for(let i=start;i<=cross;i++){
-    if(inUp?data[i].low<data[pre].low:data[i].high>data[pre].high) pre=i;
-  }
-  let post=-1;
-  for(let i=cross+2;i<data.length-2;i++){
-    const fh = data[i].high>data[i-1].high&&data[i].high>data[i-2].high
-            && data[i].high>data[i+1].high&&data[i].high>data[i+2].high;
-    const fl = data[i].low<data[i-1].low&&data[i].low<data[i-2].low
-            && data[i].low<data[i+1].low&&data[i].low<data[i+2].low;
-    if(inUp&&fh){ post=i; break; }
-    if(!inUp&&fl){ post=i; break; }
-  }
-  if(post<0) return;
-  const p0=inUp?data[pre].low:data[pre].high,
-        p1=inUp?data[post].high:data[post].low,
-        r = Math.abs(p1-p0),
-        lvl = inUp
-          ? {retr:p1-r*0.618,ext127:p1+r*0.27,ext618:p1+r*0.618,ext2618:p1+r*1.618}
-          : {retr:p1+r*0.618,ext127:p1-r*0.27,ext618:p1-r*0.618,ext2618:p1-r*1.618};
-  let touched=false,moved127=false;
-  for(let i=post+1;i<data.length;i++){
-    if(inUp){
-      if(data[i].low<=lvl.retr) touched=true;
-      if(data[i].high>=lvl.ext127) moved127=true;
-    } else {
-      if(data[i].high>=lvl.retr) touched=true;
-      if(data[i].low<=lvl.ext127) moved127=true;
+  const isUp=lastGC>lastDC,crossIdx=isUp?lastGC:lastDC;
+  if(crossIdx<2) return;
+
+  const findPre=(start,end)=>{
+    let idx=end;
+    for(let i=start;i<=end;i++){
+      if(isUp?data[i].low<data[idx].low:data[i].high>data[idx].high) idx=i;
+    }
+    return idx;
+  };
+  const findPost=from=>{
+    for(let i=from+2;i<data.length-2;i++){
+      const fh=data[i].high>data[i-1].high&&data[i].high>data[i-2].high
+              &&data[i].high>data[i+1].high&&data[i].high>data[i+2].high;
+      const fl=data[i].low<data[i-1].low&&data[i].low<data[i-2].low
+              &&data[i].low<data[i+1].low&&data[i].low<data[i+2].low;
+      if(isUp&&fh) return i; if(!isUp&&fl) return i;
+    }
+    return -1;
+  };
+
+  let startIdx=isUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0);
+  let preIdx=findPre(startIdx,crossIdx), postIdx=findPost(crossIdx);
+  if(postIdx<0) return;
+
+  const computeTarget=(pIdx,qIdx)=>{
+    const p0=isUp?data[pIdx].low:data[pIdx].high,
+          p1=isUp?data[qIdx].high:data[qIdx].low,
+          r=Math.abs(p1-p0),
+          lvl=isUp
+           ? {retr:p1-r*0.618,ext127:p1+r*0.27,ext618:p1+r*0.618,ext2618:p1+r*1.618}
+           : {retr:p1+r*0.618,ext127:p1-r*0.27,ext618:p1-r*0.618,ext2618:p1-r*1.618};
+    let touched=false,moved127=false;
+    for(let i=qIdx+1;i<data.length;i++){
+      if(isUp){
+        if(data[i].low<=lvl.retr) touched=true;
+        if(data[i].high>=lvl.ext127) moved127=true;
+      } else {
+        if(data[i].high>=lvl.retr) touched=true;
+        if(data[i].low<=lvl.ext127) moved127=true;
+      }
+    }
+    return touched?lvl.ext618:(!touched&&!moved127?lvl.ext127:lvl.ext2618);
+  };
+
+  let target=computeTarget(preIdx,postIdx);
+  const lastClose=data[data.length-1].close;
+  if((isUp&&lastClose>=target)||(!isUp&&lastClose<=target)){
+    const newPre=postIdx, newPost=findPost(newPre);
+    if(newPost>=0){
+      preIdx=newPre; postIdx=newPost;
+      target=computeTarget(preIdx,postIdx);
     }
   }
-  const target = touched?lvl.ext618:(!touched&&!moved127?lvl.ext127:lvl.ext2618);
-  series.createPriceLine({
-    price:            target,
-    color:            'darkgreen',
-    lineWidth:        2,
-    axisLabelVisible: true,
-    title:            `Fibonacci Target: ${target.toFixed(4)}`
+
+  series.removePriceLine(e._fibLineId);
+  const line=series.createPriceLine({
+    price:target,color:'darkgreen',lineWidth:2,
+    axisLabelVisible:true,
+    title:`Fibonacci Target: ${target.toFixed(4)}`
   });
-  e.fibTarget = target;
-  if(!e.zoomSeries){
-    e.zoomSeries = chart.addLineSeries({color:'transparent',lineWidth:0});
-  }
-  e.zoomSeries.setData([
+  e._fibLineId=line.id;
+  if(!e._zoom) e._zoom=chart.addLineSeries({color:'transparent',lineWidth:0});
+  e._zoom.setData([
     {time:data[0].time,            value:target},
     {time:data[data.length-1].time,value:target}
   ]);
+  e.fibTarget=target;
 }
 
 // ――― 8) drawEMAandProbability ―――
 function drawEMAandProbability(cid){
-  const e=charts[cid]; if(!e||!e.data||!e.emaArr) return false;
+  const e=charts[cid]; 
+  if(!e||!e.data||!e.emaArr||!e.emaArr.length) return false;
   const lastC=e.data[e.data.length-1].close,
         lastE=e.emaArr[e.emaArr.length-1],
         bull=lastC>lastE,
@@ -342,7 +318,7 @@ function drawRSIandSignal(cid,dailyBullish){
     if(val<50&&val>maVal){ text='Buy Signal confirmed'; color='green'; signal=true; }
     else                  { text='Wait for Buy Signal';   color='gray';  }
   } else {
-    if(val>50&&val<maVal){ text='Sell Signal confirmed'; color='red'; signal=false; }
+    if(val>50&&val<maVal){ text='Sell Signal confirmed'; color='red';   signal=false; }
     else                  { text='Wait for Sell Signal';  color='gray';  }
   }
   const id=`${cid}-rsi`;
@@ -370,23 +346,21 @@ async function generateAISummary(){
         tgt =charts.hourlyChart?.fibTarget??'—';
   let avgRet='N/A';
   try {
-    const tdSym=toTDSymbol(sym)||sym,
-          resp=await axios.get('https://api.twelvedata.com/time_series',{params:{
-            symbol:tdSym,interval:'1month',outputsize:60,apikey:API_KEY
-          }});
+    const tdSym=toTDSymbol(sym)||sym;
+    const resp=await axios.get('https://api.twelvedata.com/time_series',{params:{
+      symbol:tdSym,interval:'1month',outputsize:60,apikey:API_KEY
+    }});
     let vals=resp.data.values||[];
     vals=vals.slice().reverse();
     if(vals.length>1){
       const rets=[];
       for(let i=1;i<vals.length;i++){
-        const p=parseFloat(vals[i-1].close),
-              c=parseFloat(vals[i].close);
+        const p=parseFloat(vals[i-1].close),c=parseFloat(vals[i].close);
         rets.push((c/p-1)*100);
       }
       avgRet=`${(rets.reduce((a,b)=>a+b,0)/rets.length).toFixed(2)}%`;
     }
-  } catch(e){ console.error('Avg monthly error',e); }
-
+  } catch(e){}
   const prompt=`
 Symbol: ${sym}
 Probability (45‑EMA): ${bull?'Bullish':'Bearish'}
@@ -403,7 +377,6 @@ Write a concise analysis covering:
     const ai=await axios.post('/api/ai',{prompt});
     outPre.textContent=ai.data.summary||ai.data.text||JSON.stringify(ai.data,null,2);
   } catch(e){
-    console.error('AI error',e);
     outPre.textContent=`❌ AI error: ${e.message}`;
   }
 }
@@ -430,7 +403,7 @@ async function runScanner(){
     let proj='—';
     if(cryptoSymbols.includes(sym)||
        equitiesSymbols.includes(sym)||
-       etfSymbols.includes(sym)||
+       etfSymbols.includes(sym)   ||
        carry.includes(sym)){
       const cagr=await getProjectedAnnualReturn(sym);
       proj=cagr!=null?`${(cagr*100).toFixed(2)}%`:'N/A';
@@ -448,7 +421,7 @@ async function runScanner(){
   }
 }
 
-// ――― 12) updateDashboard ―――
+// ――― 12) Update Dashboard ―――
 async function updateDashboard(){
   const sym=symbolInput.value; if(!symbols.includes(sym)) return;
   dailyTitle.textContent=`${sym} — Daily`;
