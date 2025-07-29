@@ -337,30 +337,37 @@ function drawRSIandSignal(cid,dailyBullish){
 
 // ――― 10) generateAISummary ―――
 async function generateAISummary(){
-  const sym=symbolInput.value;
-  outPre.textContent=`Loading AI summary for ${sym}…`;
-  const bull=drawEMAandProbability('dailyChart'),
-        sig=drawRSIandSignal('hourlyChart',bull),
-        tgt=charts.hourlyChart?.fibTarget??'—';
-  let avgRet='N/A';
+  const sym = symbolInput.value;
+  outPre.textContent = `Loading AI summary for ${sym}…`;
+
+  // draw and capture indicators
+  const bull = drawEMAandProbability('dailyChart');
+  const sig  = drawRSIandSignal('hourlyChart', bull);
+  const tgt  = charts.hourlyChart?.fibTarget ?? '—';
+
+  // compute average monthly return
+  let avgRet = 'N/A';
   try {
-    const r=await axios.get('https://api.twelvedata.com/time_series',{params:{
-      symbol:sym,interval:'1month',outputsize:60,apikey:API_KEY
-    }});
-    let vals=(r.data.values||[]).slice().reverse();
-    if(vals.length>1){
-      const rets=[];
-      for(let i=1;i<vals.length;i++){
-        const p=parseFloat(vals[i-1].close),c=parseFloat(vals[i].close);
-        rets.push((c/p-1)*100);
+    const resp = await axios.get('https://api.twelvedata.com/time_series', {
+      params: { symbol: sym, interval: '1month', outputsize: 60, apikey: API_KEY }
+    });
+    let vals = (resp.data.values || []).slice().reverse();
+    if (vals.length > 1) {
+      const rets = [];
+      for (let i = 1; i < vals.length; i++) {
+        const prev = parseFloat(vals[i - 1].close);
+        const cur  = parseFloat(vals[i].close);
+        rets.push((cur / prev - 1) * 100);
       }
-      avgRet=`${(rets.reduce((a,b)=>a+b,0)/rets.length).toFixed(2)}%`;
+      avgRet = `${(rets.reduce((a, b) => a + b, 0) / rets.length).toFixed(2)}%`;
     }
-  }catch{}
-  const prompt=`
+  } catch {}
+
+  // build prompt
+  const prompt = `
 Symbol: ${sym}
-Probability (45‑EMA): ${bull?'Bullish':'Bearish'}
-H1 Signal: ${sig?'Buy Signal confirmed':'Wait for signal'}
+Probability (45‑EMA): ${bull ? 'Bullish' : 'Bearish'}
+H1 Signal: ${sig ? 'Buy Signal confirmed' : 'Wait for signal'}
 Fibonacci Target: ${tgt}
 Average monthly return (last 5 years): ${avgRet}
 
@@ -368,19 +375,30 @@ Write a concise analysis covering:
 1. The current state of ${sym} and overall market sentiment.
 2. Major upcoming announcements or events that could impact it.
 3. How the probability, H1 signal, and target fit into this context.
-`;
+  `;
+
+  // call AI
   try {
-    const ai=await axios.post('/api/ai',{prompt});
-    outPre.textContent=ai.data.summary||ai.data.text||JSON.stringify(ai.data,null,2);
-  }catch(e){
-    outPre.textContent=`❌ AI error: ${e.message}`;
+    const ai = await axios.post('/api/ai', { prompt });
+    outPre.textContent = ai.data.summary || ai.data.text || JSON.stringify(ai.data, null, 2);
+  } catch (e) {
+    outPre.textContent = `❌ AI error: ${e.message}`;
+  }
+}
+
+// ――― 11.0) Scanner cache (1 hour) ―――
+let lastScan = { ts: 0, data: [] };
+function renderScannerRows(rows) {
+  scannerTbody.innerHTML = '';
+  for (const r of rows) {
+    scannerTbody.append(r);
   }
 }
 
 // ――― 11) runScanner ―――
-async function runScanner() {
+async function runScanner(){
   const now = Date.now();
-  // 1‑hour cache
+  // reuse cached rows if within the last hour
   if (now - lastScan.ts < 60 * 60 * 1000) {
     renderScannerRows(lastScan.data);
     return;
@@ -390,42 +408,36 @@ async function runScanner() {
   let list = filter
     ? symbols.filter(s => s.includes(filter))
     : symbols.slice();
+
   // dedupe
   const seen = new Set();
   list = list.filter(s => !seen.has(s) && seen.add(s));
 
   const carry = getPositiveCarryFX();
-  let count = 0;
-  const rows = [];
+  const rows  = [];
+  let count    = 0;
 
   for (const sym of list) {
     if (!filter && count >= 20) break;
 
-    // daily
+    // daily timeframe
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
 
-    // hourly
+    // hourly timeframe
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
-    const sg = drawRSIandSignal('scannerTempHourly', pb);
+    const sg  = drawRSIandSignal('scannerTempHourly', pb);
 
-    // if no filter and no valid signal & bearish, skip
-    if (!filter && sg === null && pb === false) continue;
+    // skip if no filter, bearish and no signal
+    if (!filter && pb === false && sg === null) continue;
 
-    // determine status text/color
+    // determine status
     let statusText, statusColor;
-    if (sg === true) {
-      statusText = 'Buy Signal confirmed';
-      statusColor = 'green';
-    } else if (sg === false) {
-      statusText = 'Sell Signal confirmed';
-      statusColor = 'red';
-    } else {
-      statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal';
-      statusColor = 'gray';
-    }
+    if (sg === true)       { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
+    else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
+    else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
     // projected return
     let proj = '—';
@@ -435,10 +447,10 @@ async function runScanner() {
     } else if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) {
       const bars = charts.scannerTempDaily.data;
       if (bars?.length > 1) {
-        const first = bars[0].close,
-              last  = bars[bars.length - 1].close,
-              yrs   = (bars[bars.length - 1].time - bars[0].time) / (365 * 24 * 60 * 60),
-              cagr  = Math.pow(last / first, 1 / yrs) - 1;
+        const first = bars[0].close;
+        const last  = bars[bars.length - 1].close;
+        const yrs   = (bars[bars.length - 1].time - bars[0].time) / (365 * 24 * 60 * 60);
+        const cagr  = Math.pow(last / first, 1 / yrs) - 1;
         proj = `${(cagr * 100).toFixed(2)}%`;
       } else {
         proj = 'N/A';
@@ -459,7 +471,6 @@ async function runScanner() {
       <td style="text-align:right;">${proj}</td>
     `;
     rows.push(tr);
-
     count++;
   }
 
@@ -468,25 +479,32 @@ async function runScanner() {
   renderScannerRows(rows);
 }
 
-
 // ――― 12) updateDashboard ―――
 async function updateDashboard(){
-  const sym=symbolInput.value;
-  if(!symbols.includes(sym)) return;
-  dailyTitle.textContent=`${sym} — Daily`;
-  hourlyTitle.textContent=`${sym} — 1 Hour`;
-  await fetchAndRender(sym,'1d','dailyChart');
-  await fetchAndRender(sym,'1h','hourlyChart');
+  const sym = symbolInput.value;
+  if (!symbols.includes(sym)) return;
+
+  dailyTitle.textContent  = `${sym} — Daily`;
+  hourlyTitle.textContent = `${sym} — 1 Hour`;
+
+  await fetchAndRender(sym, '1d', 'dailyChart');
+  await fetchAndRender(sym, '1h', 'hourlyChart');
+
+  drawFibsOnChart('dailyChart');
+  drawFibsOnChart('hourlyChart');
+
+  const bull = drawEMAandProbability('dailyChart');
+  drawRSIandSignal('hourlyChart', bull);
+
   await generateAISummary();
   await runScanner();
 }
 
 // ――― 13) init ―――
-(async function init() {
-  // 1) Load FX interest rates
+(async function init(){
   await loadInterestRates();
 
-  // 2) Create hidden off‑screen divs for the scanner to render into
+  // create hidden divs for off‑screen rendering
   ['scannerTempDaily','scannerTempHourly'].forEach(id => {
     if (!document.getElementById(id)) {
       const d = document.createElement('div');
@@ -496,14 +514,14 @@ async function updateDashboard(){
     }
   });
 
-  // 3) Populate the symbol dropdown (datalist)
+  // populate the datalist
   symbols.forEach(s => {
     const o = document.createElement('option');
     o.value = s;
     datalistEl.appendChild(o);
   });
 
-  // 4) Set initial symbol and wire events
+  // set initial symbol and hook events
   symbolInput.value = cryptoSymbols[0];
   symbolInput.addEventListener('input', () => {
     if (symbols.includes(symbolInput.value)) updateDashboard();
@@ -511,7 +529,6 @@ async function updateDashboard(){
   aiBtn.addEventListener('click', generateAISummary);
   scannerFilter.addEventListener('input', runScanner);
 
-  // 5) Kick off the first render
+  // first render
   updateDashboard();
 })();
-
