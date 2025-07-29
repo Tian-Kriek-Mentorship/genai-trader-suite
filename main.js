@@ -378,56 +378,96 @@ Write a concise analysis covering:
 }
 
 // ――― 11) runScanner ―――
-async function runScanner(){
-  scannerTbody.innerHTML='';
-  const filter=scannerFilter.value.trim().toUpperCase();
-  let list=filter?symbols.filter(s=>s.includes(filter)):symbols.slice();
-  const seen=new Set();
-  list=list.filter(s=>!seen.has(s)&&seen.add(s));
+async function runScanner() {
+  const now = Date.now();
+  // 1‑hour cache
+  if (now - lastScan.ts < 60 * 60 * 1000) {
+    renderScannerRows(lastScan.data);
+    return;
+  }
 
-  const carry=getPositiveCarryFX();
-  let count=0;
-  for(const sym of list){
-    if(!filter&&count>=20) break;
-    await fetchAndRender(sym,'1d','scannerTempDaily');
-    const pb=drawEMAandProbability('scannerTempDaily');
-    await fetchAndRender(sym,'1h','scannerTempHourly');
+  const filter = scannerFilter.value.trim().toUpperCase();
+  let list = filter
+    ? symbols.filter(s => s.includes(filter))
+    : symbols.slice();
+  // dedupe
+  const seen = new Set();
+  list = list.filter(s => !seen.has(s) && seen.add(s));
+
+  const carry = getPositiveCarryFX();
+  let count = 0;
+  const rows = [];
+
+  for (const sym of list) {
+    if (!filter && count >= 20) break;
+
+    // daily
+    await fetchAndRender(sym, '1d', 'scannerTempDaily');
+    const pb = drawEMAandProbability('scannerTempDaily');
+
+    // hourly
+    await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
-    const h1T=charts.scannerTempHourly?.fibTarget??'—';
-    const sg=drawRSIandSignal('scannerTempHourly',pb);
-    if(!filter&&sg===null&&pb===false) continue;
+    const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
+    const sg = drawRSIandSignal('scannerTempHourly', pb);
 
-    let statusText,statusColor;
-    if(sg===true){statusText='Buy Signal confirmed';statusColor='green';}
-    else if(sg===false){statusText='Sell Signal confirmed';statusColor='red';}
-    else{statusText=pb?'Wait for Buy Signal':'Wait for Sell Signal';statusColor='gray';}
+    // if no filter and no valid signal & bearish, skip
+    if (!filter && sg === null && pb === false) continue;
 
-    let proj='—';
-    if (cryptoSymbols.includes(sym)) {
-  const cagr = await getProjectedAnnualReturn(sym);
-  proj = (typeof cagr === 'number') ? `${(cagr*100).toFixed(2)}%` : 'N/A';
-}
- else if(equitiesSymbols.includes(sym)||etfSymbols.includes(sym)){
-      const bars=charts.scannerTempDaily.data;
-      if(bars?.length>1){
-        const first=bars[0].close, last=bars[bars.length-1].close;
-        const yrs=(bars[bars.length-1].time-bars[0].time)/(365*24*60*60);
-        const cagr=Math.pow(last/first,1/yrs)-1;
-        proj=`${(cagr*100).toFixed(2)}%`;
-      } else proj='N/A';
+    // determine status text/color
+    let statusText, statusColor;
+    if (sg === true) {
+      statusText = 'Buy Signal confirmed';
+      statusColor = 'green';
+    } else if (sg === false) {
+      statusText = 'Sell Signal confirmed';
+      statusColor = 'red';
+    } else {
+      statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal';
+      statusColor = 'gray';
     }
-    const tr=document.createElement('tr');
-    tr.innerHTML=`
+
+    // projected return
+    let proj = '—';
+    if (cryptoSymbols.includes(sym)) {
+      const cagr = await getProjectedAnnualReturn(sym);
+      proj = (typeof cagr === 'number') ? `${(cagr * 100).toFixed(2)}%` : 'N/A';
+    } else if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) {
+      const bars = charts.scannerTempDaily.data;
+      if (bars?.length > 1) {
+        const first = bars[0].close,
+              last  = bars[bars.length - 1].close,
+              yrs   = (bars[bars.length - 1].time - bars[0].time) / (365 * 24 * 60 * 60),
+              cagr  = Math.pow(last / first, 1 / yrs) - 1;
+        proj = `${(cagr * 100).toFixed(2)}%`;
+      } else {
+        proj = 'N/A';
+      }
+    }
+
+    // build row
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
       <td>${sym}</td>
-      <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
-      <td style="color:${statusColor}">${statusText}</td>
-      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
+      <td style="color:${pb ? 'green' : 'red'}">
+        ${pb ? 'Bullish' : 'Bearish'}
+      </td>
+      <td style="color:${statusColor}">
+        ${statusText}
+      </td>
+      <td>${typeof h1T === 'number' ? h1T.toFixed(4) : h1T}</td>
       <td style="text-align:right;">${proj}</td>
     `;
-    scannerTbody.append(tr);
+    rows.push(tr);
+
     count++;
   }
+
+  // cache & render
+  lastScan = { ts: now, data: rows };
+  renderScannerRows(rows);
 }
+
 
 // ――― 12) updateDashboard ―――
 async function updateDashboard(){
