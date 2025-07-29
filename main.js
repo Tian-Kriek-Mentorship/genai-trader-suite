@@ -48,7 +48,6 @@ const forexSymbols    = ['EURUSD','USDJPY','GBPUSD','USDCHF','USDCAD','AUDUSD','
 const equitiesSymbols = ['AAPL','MSFT','NVDA','GOOG','META','AMZN','TSLA','BRK.B','UNH','JPM','V','MA','PG','HD','JNJ','BAC','PFE','CVX','XOM','KO'];
 const etfSymbols      = ['BITO','BLOK','BTF','IBIT','FBTC','GBTC','ETHE'];
 const symbols         = [...cryptoSymbols, ...forexSymbols, ...equitiesSymbols, ...etfSymbols];
-const API_KEY         = window.TD_API_KEY;
 const projCache       = {};
 let interestRates     = {};
 const charts          = {};
@@ -225,10 +224,6 @@ if (!data && (cryptoSymbols.includes(symbol) || !rateLimited)) {
   if (interval === '1h') drawRSIandSignal(containerId, drawEMAandProbability('dailyChart'));
 }
 
-// ――― 7) drawFibsOnChart ―――
-function drawFibsOnChart(cid) {
-  // … your existing drawFibsOnChart code …
-}
 
 
 // ――― 7) drawFibsOnChart ―――
