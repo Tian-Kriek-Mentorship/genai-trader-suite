@@ -229,94 +229,120 @@ async function fetchAndDraw(symbol, _, interval, containerId) {
 
 // ――― 7) drawFibsOnChart ―――
 function drawFibsOnChart(cid) {
-  const e=charts[cid];
-  if(!e||!e.data||e.data.length<5) return;
-  const {chart,series,data} = e;
+  const e = charts[cid];
+  if (!e || !e.data || e.data.length < 5) return;
 
-  // SMAs on open
-  const o=data.map(d=>d.open);
-  const m50=sma(o,50), m200=sma(o,200);
+  const { chart, series, data } = e;
+  const o     = data.map(d => d.open);
+  const m50   = sma(o, 50);
+  const m200  = sma(o, 200);
 
-  // last cross indices
-  let lastGC=-1, lastDC=-1;
-  for(let i=1;i<o.length;i++){
-    if(m50[i]>m200[i]&&m50[i-1]<=m200[i-1]) lastGC=i;
-    if(m50[i]<m200[i]&&m50[i-1]>=m200[i-1]) lastDC=i;
+  // find last cross indices
+  let lastGC = -1, lastDC = -1;
+  for (let i = 1; i < o.length; i++) {
+    if (m50[i] > m200[i] && m50[i-1] <= m200[i-1]) lastGC = i;
+    if (m50[i] < m200[i] && m50[i-1] >= m200[i-1]) lastDC = i;
+  }
+  const inUpMode = lastGC > lastDC;
+  let crossIdx   = inUpMode ? lastGC : lastDC;
+  if (crossIdx < 2) return;
+
+  // helper to build and return fib target from given preIdx/postIdx
+  function buildFib(preIdx, postIdx) {
+    const p0 = inUpMode ? data[preIdx].low  : data[preIdx].high;
+    const p1 = inUpMode ? data[postIdx].high : data[postIdx].low;
+    const r  = Math.abs(p1 - p0);
+    const lvl = inUpMode
+      ? { retr: p1 - r*0.618, ext127: p1 + r*0.27, ext618: p1 + r*0.618, ext2618: p1 + r*1.618 }
+      : { retr: p1 + r*0.618, ext127: p1 - r*0.27, ext618: p1 - r*0.618, ext2618: p1 - r*1.618 };
+
+    // pick target
+    let touched=false, moved127=false;
+    for (let j = postIdx+1; j < data.length; j++) {
+      if (inUpMode) {
+        if (data[j].low  <= lvl.retr)   touched = true;
+        if (data[j].high >= lvl.ext127) moved127 = true;
+      } else {
+        if (data[j].high >= lvl.retr)   touched = true;
+        if (data[j].low  <= lvl.ext127) moved127 = true;
+      }
+    }
+    return touched ? lvl.ext618
+         : (!touched && !moved127) ? lvl.ext127
+         : lvl.ext2618;
   }
 
-  const inUpMode=lastGC>lastDC;
-  const crossIdx=inUpMode?lastGC:lastDC;
-  if(crossIdx<2) return;
+  // function to find preIdx/postIdx around a given cross, starting from some index
+  function findSwing(cross, startBack, startForward) {
+    let preIdx = cross;
+    const startIdx = startBack >= 0 ? startBack : 0;
+    for (let i = startIdx; i <= cross; i++) {
+      if (inUpMode) {
+        if (data[i].low < data[preIdx].low) preIdx = i;
+      } else {
+        if (data[i].high > data[preIdx].high) preIdx = i;
+      }
+    }
+    let postIdx = -1;
+    for (let i = cross + startForward; i < data.length - 2; i++) {
+      const fh = data[i].high > data[i-1].high &&
+                 data[i].high > data[i-2].high &&
+                 data[i].high > data[i+1].high &&
+                 data[i].high > data[i+2].high;
+      const fl = data[i].low < data[i-1].low &&
+                 data[i].low < data[i-2].low &&
+                 data[i].low < data[i+1].low &&
+                 data[i].low < data[i+2].low;
+      if (inUpMode && fh)    { postIdx = i; break; }
+      if (!inUpMode && fl)   { postIdx = i; break; }
+    }
+    return postIdx < 0 ? null : { preIdx, postIdx };
+  }
 
-  // swing before cross
-  const startIdx=inUpMode?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0);
-  let preIdx=crossIdx;
-  for(let i=startIdx;i<=crossIdx;i++){
-    if(inUpMode){
-      if(data[i].low<data[preIdx].low) preIdx=i;
+  // 1) First normal fib
+  let swing = findSwing(crossIdx, inUpMode ? lastDC : lastGC, 2);
+  if (!swing) return;  // no fractal yet
+  let target = buildFib(swing.preIdx, swing.postIdx);
+
+  // 2) If up-mode and price has now jumped above that old target,
+  //    find the next swing AFTER the point where price first crossed above:
+  if (inUpMode && data[data.length-1].close > target) {
+    // locate the bar where price first closed above old target
+    const breachBar = data.findIndex(d => d.close > target);
+    // then find the next cross (golden) before that breach if any
+    crossIdx = data.findIndex((_, i) => i > swing.postIdx && m50[i]>m200[i] && m50[i-1]<=m200[i-1]);
+    if (crossIdx < 2 || breachBar < crossIdx) {
+      // fallback: just use the same cross but start forward from breach
+      swing = findSwing(crossIdx, swing.postIdx, breachBar - crossIdx + 2);
     } else {
-      if(data[i].high>data[preIdx].high) preIdx=i;
+      // fresh cross found: swing from that
+      swing = findSwing(crossIdx, inUpMode ? lastDC : lastGC, 2);
+    }
+    if (swing) {
+      target = buildFib(swing.preIdx, swing.postIdx);
     }
   }
 
-  // first fractal
-  let postIdx=-1;
-  for(let i=crossIdx+2;i<data.length-2;i++){
-    const fh=data[i].high>data[i-1].high&&data[i].high>data[i-2].high&&
-             data[i].high>data[i+1].high&&data[i].high>data[i+2].high;
-    const fl=data[i].low<data[i-1].low&&data[i].low<data[i-2].low&&
-             data[i].low<data[i+1].low&&data[i].low<data[i+2].low;
-    if(inUpMode&&fh){ postIdx=i; break; }
-    if(!inUpMode&&fl){ postIdx=i; break; }
-  }
-
-  // if waiting on up-fractal, bail
-  if(postIdx<0) return;
-
-  // fib levels
-  const p0=inUpMode?data[preIdx].low:data[preIdx].high;
-  const p1=inUpMode?data[postIdx].high:data[postIdx].low;
-  const r=Math.abs(p1-p0);
-  const lvl={
-    retr:   inUpMode? p1-r*0.618 : p1+r*0.618,
-    ext127: inUpMode? p1+r*0.27  : p1-r*0.27,
-    ext618: inUpMode? p1+r*0.618 : p1-r*0.618,
-    ext2618:inUpMode? p1+r*1.618 : p1-r*1.618
-  };
-
-  let touched=false, moved127=false;
-  for(let i=postIdx+1;i<data.length;i++){
-    if(inUpMode){
-      if(data[i].low <= lvl.retr) touched=true;
-      if(data[i].high>= lvl.ext127) moved127=true;
-    } else {
-      if(data[i].high>= lvl.retr) touched=true;
-      if(data[i].low <= lvl.ext127) moved127=true;
-    }
-  }
-  const targetPrice = touched
-    ? lvl.ext618
-    : (!touched && !moved127)
-      ? lvl.ext127
-      : lvl.ext2618;
-
+  // finally, draw the target
   series.createPriceLine({
-    price:            targetPrice,
+    price:            target,
     color:            'darkgreen',
     lineWidth:        2,
     axisLabelVisible: true,
-    title:            `Fibonacci Target: ${targetPrice.toFixed(4)}`
+    title:            `Fibonacci Target: ${target.toFixed(4)}`
   });
-  e.fibTarget=targetPrice;
+  e.fibTarget = target;
 
-  if(!e.zoomSeries){
-    e.zoomSeries=chart.addLineSeries({color:'rgba(0,0,0,0)',lineWidth:0});
+  // maintain zoom
+  if (!e.zoomSeries) {
+    e.zoomSeries = chart.addLineSeries({ color:'transparent', lineWidth:0 });
   }
   e.zoomSeries.setData([
-    {time:data[0].time,            value:targetPrice},
-    {time:data[data.length-1].time,value:targetPrice}
+    { time: data[0].time,            value: target },
+    { time: data[data.length-1].time,value: target }
   ]);
 }
+
 
 // ――― 8) EMA & Probability overlay ―――
 function drawEMAandProbability(cid){
