@@ -204,9 +204,10 @@ async function fetchAndDraw(symbol,_,interval,containerId){
 }
 
 // ――― 7) drawFibsOnChart (auto‑recycle) ―――
-function drawFibsOnChart(cid){
-  const e=charts[cid]; if(!e||!e.data||e.data.length<7) return;
-  const {chart,series,data}=e;
+function drawFibsOnChart(cid) {
+  const e = charts[cid];
+  if (!e || !e.data || e.data.length < 7) return;
+  const { chart, series, data } = e;
   const opens=data.map(d=>d.open),m50=sma(opens,50),m200=sma(opens,200);
   let lastGC=-1,lastDC=-1;
   for(let i=1;i<opens.length;i++){
@@ -268,13 +269,17 @@ function drawFibsOnChart(cid){
     }
   }
 
-  series.removePriceLine(e._fibLineId);
-  const line=series.createPriceLine({
-    price:target,color:'darkgreen',lineWidth:2,
-    axisLabelVisible:true,
-    title:`Fibonacci Target: ${target.toFixed(4)}`
+  if (e._fibLineId) {
+    series.removePriceLine(e._fibLineId);
+  }
+  const line = series.createPriceLine({
+    price:            target,
+    color:            'darkgreen',
+    lineWidth:        2,
+    axisLabelVisible: true,
+    title:            `Fibonacci Target: ${target.toFixed(4)}`
   });
-  e._fibLineId=line.id;
+  e._fibLineId = line.id;
   if(!e._zoom) e._zoom=chart.addLineSeries({color:'transparent',lineWidth:0});
   e._zoom.setData([
     {time:data[0].time,            value:target},
