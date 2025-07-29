@@ -18,10 +18,11 @@
       color: white;
       border-radius: 5px;
     }
-    select, input#scannerFilter {
+    input, input[list] {
       font-size: 20px;
       padding: 0.5rem;
       margin-right: 1rem;
+      width: 300px;
     }
     pre {
       white-space: pre-wrap;
@@ -66,10 +67,13 @@
   <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
 
   <div style="margin-bottom: 1rem;">
-    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">
+    <label for="symbolInput" style="font-size:22px; margin-right:0.5rem;">
       Select Symbol:
     </label>
-    <select id="symbolSelect"></select>
+    <input list="symbolOptions" id="symbolInput" placeholder="Search symbol…" />
+    <datalist id="symbolOptions">
+      <!-- options injected by main.js -->
+    </datalist>
   </div>
 
   <div>
@@ -128,7 +132,7 @@
     <ul>
       <li>📊 Trend strength indicators</li>
       <li>📈 Volume + momentum overlays</li>
-      <li>🌍 Asset switching (ETH, SPX, DXY, STK, etc.)</li>
+      <li>🌍 Asset switching (FX, STK, ETF, etc.)</li>
       <li>🧠 AI summaries and alerts</li>
     </ul>
   </div>
@@ -136,7 +140,7 @@
   <!-- libraries -->
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-  <!-- Twelve Data key -->
+  <!-- inject your Twelve Data key -->
   <script>window.TD_API_KEY = '1eed79e08f4a4d6092a9b4e634c3bbf8';</script>
   <!-- main application -->
   <script type="module" src="/main.js"></script>
