@@ -171,7 +171,7 @@ async function fetchAndDraw(symbol, _, interval, containerId) {
       try {
         const tdInt = interval==='1d'?'1day':'1h';
         const r = await axios.get('https://api.twelvedata.com/time_series',{params:{
-          symbol:tdSym,interval:tdInt,outputsize:500,apikey:API_KEY
+          symbol:tdSym,interval:tdInt,outputsize:750,apikey:API_KEY
         }});
         const vals=r.data.values||[];
         data=vals.map(v=>({
