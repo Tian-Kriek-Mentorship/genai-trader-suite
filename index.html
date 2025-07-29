@@ -2,27 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Liquidity‑Cycle Dashboard</title>
+  <title>Liquidity‑Cycle Dashboard (v0.1)</title>
   <link rel="icon" href="/favicon.png" />
   <style>
-    body { font-family: system-ui, sans-serif; font-size: 22px; margin: 2rem; }
+    body {
+      font-family: system-ui, sans-serif;
+      font-size: 22px;
+      margin: 2rem;
+    }
     h1 { margin-bottom: 1rem; font-size: 32px; }
     h2 { margin-top: 1rem; font-size: 26px; }
     button {
       margin-bottom: 1rem;
-      padding: 0.75rem 1.5rem;
-      font-size: 20px;
+      padding: 0.5rem 1rem;
+      font-size: 18px;
       cursor: pointer;
       border: none;
       background-color: #1976d2;
       color: white;
-      border-radius: 5px;
+      border-radius: 4px;
     }
-    input, input[list] {
-      font-size: 20px;
-      padding: 0.5rem;
-      margin-right: 1rem;
-      width: 300px;
+    input, select {
+      font-size: 18px;
+      padding: 0.3rem 0.5rem;
     }
     pre {
       white-space: pre-wrap;
@@ -34,25 +36,23 @@
       box-sizing: border-box;
       margin-top: 0.5rem;
     }
-    .charts-container { display: flex; gap: 2rem; margin-top: 1.5rem; }
-    .chart-block { flex: 1; }
+    .charts-container {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .chart-block {
+      flex: 1;
+    }
     .chart-block > div {
       position: relative;
       width: 100%;
       height: 700px;
       margin-top: 0.5rem;
     }
-    #scannerTable {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 0.5rem;
+    .summary-block {
+      margin-bottom: 1rem;
     }
-    #scannerTable th, #scannerTable td {
-      border: 1px solid #ddd;
-      padding: 0.5rem;
-      text-align: left;
-    }
-    #scannerTable th { background-color: #f0f0f0; }
     .explanation {
       font-size: 22px;
       line-height: 1.7;
@@ -61,66 +61,109 @@
     }
     .explanation ul { margin-top: 0.5rem; padding-left: 1.4rem; }
     .explanation li { margin-bottom: 0.75rem; }
+
+    /* Scanner table styling */
+    #scannerTable {
+      border-collapse: collapse;
+      table-layout: auto;       /* auto sized columns */
+      width: auto;              /* shrink to fit */
+      margin-top: 0.5rem;
+    }
+    #scannerTable th,
+    #scannerTable td {
+      border: 1px solid #ddd;
+      padding: 0.25rem 0.5rem;  /* less padding */
+      white-space: nowrap;      /* no wrapping */
+      text-align: left;
+    }
+    #scannerTable th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+    }
+    /* allow horizontal scroll if still too wide */
+    .scanner-container {
+      overflow-x: auto;
+    }
   </style>
 </head>
 <body>
   <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
 
   <div style="margin-bottom: 1rem;">
-    <label for="symbolInput" style="font-size:22px; margin-right:0.5rem;">
+    <label for="symbolInput" style="font-size:20px; margin-right:0.5rem;">
       Select Symbol:
     </label>
-    <input list="symbolOptions" id="symbolInput" placeholder="Search symbol…" />
+    <input list="symbolOptions" id="symbolInput" placeholder="e.g. BTCUSDT" />
     <datalist id="symbolOptions"></datalist>
   </div>
 
-  <div>
+  <div class="summary-block">
     <button id="aiBtn">AI Summary</button>
     <pre id="out"></pre>
   </div>
 
   <div class="charts-container">
     <div class="chart-block">
-      <h2 id="dailyTitle">BTCUSDT — Daily</h2>
+      <h2 id="dailyTitle">BTCUSDT — Daily</h2>
       <div id="dailyChart"></div>
     </div>
     <div class="chart-block">
-      <h2 id="hourlyTitle">BTCUSDT — 1 Hour</h2>
+      <h2 id="hourlyTitle">BTCUSDT — 1 Hour</h2>
       <div id="hourlyChart"></div>
     </div>
   </div>
 
   <h2>Scanner</h2>
   <input id="scannerFilter" placeholder="Filter symbols…" />
-  <table id="scannerTable">
-    <thead>
-      <tr>
-        <th>Symbol</th>
-        <th>Probability</th>
-        <th>Signal</th>
-        <th>H1 Target</th>
-        <th>Projected Annual Return</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <div class="scanner-container">
+    <table id="scannerTable">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Probability</th>
+          <th>Signal</th>
+          <th>H1 Target</th>
+          <th>Projected Annual Return</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 
   <div class="explanation">
-    <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
+    <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
     <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
     <p>Instead of watching dozens of charts or guessing when to trade, this dashboard shows you how Bitcoin (BTCUSDT) is behaving across two key timeframes:</p>
     <ul>
-      <li>📅 <strong>Daily chart</strong> – the big picture trend</li>
-      <li>🕐 <strong>Hourly chart</strong> – short-term moves</li>
+      <li>📅 <strong>Daily chart</strong> – the big picture trend</li>
+      <li>🕐 <strong>Hourly chart</strong> – short-term moves</li>
     </ul>
     <p><strong>The goal?</strong><br>
-    To spot shifts in momentum and liquidity – so you trade with the market, not against it.</p>
-    <!-- etc. -->
+    To spot shifts in momentum and liquidity – so you trade with the market, not against it.</p>
+
+    <h4>Why It’s Called “Liquidity‑Cycle”</h4>
+    <p>In every market, price moves in cycles – from accumulation to expansion, then slowdown and reversal. These cycles are driven by liquidity (where the money is). This dashboard makes it easier to:</p>
+    <ul>
+      <li>✅ See when buyers/sellers are taking control</li>
+      <li>✅ Time entries during expansions, not chop</li>
+      <li>✅ Avoid trades when liquidity dries up</li>
+    </ul>
+
+    <h4>What’s “v0.1”?</h4>
+    <p>This is the first public version, focused only on BTC/USDT.<br>
+    Future updates will include:</p>
+    <ul>
+      <li>📊 Trend strength indicators</li>
+      <li>📈 Volume + momentum overlays</li>
+      <li>🌍 Asset switching (ETH, SPX, DXY, etc.)</li>
+      <li>🧠 AI summaries and alerts</li>
+    </ul>
   </div>
 
+  <!-- scripts -->
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-  <script>window.TD_API_KEY = '1eed79e08f4a4d6092a9b4e634c3bbf8';</script>
+  <script>window.TD_API_KEY = 'your_twelve_data_key_here';</script>
   <script src="/main.js"></script>
 </body>
 </html>
