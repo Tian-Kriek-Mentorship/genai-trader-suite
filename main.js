@@ -50,12 +50,20 @@ const scannerTbody  = document.querySelector('#scannerTable tbody');
 
 // ――― 3) Helpers ―――
 function toTDSymbol(sym) {
-  if (cryptoSymbols.includes(sym))      return null;
-  if (forexSymbols.includes(sym))       return `${sym.slice(0,3)}/${sym.slice(3)}`;
-  if (equitiesSymbols.includes(sym) ||
-      etfSymbols.includes(sym))         return `${sym};
+  if (cryptoSymbols.includes(sym)) 
+    return null;
+
+  if (forexSymbols.includes(sym)) 
+    return `${sym.slice(0,3)}/${sym.slice(3)}`;
+
+  // For U.S. stocks and ETFs, just return the ticker:
+  if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) 
+    return sym;
+
+  // Otherwise (if you ever add other asset types), fall back:
   return sym;
 }
+
 
 function ema(arr,p){
   const k=2/(p+1), out=[], n=arr.length; let prev;
