@@ -412,35 +412,44 @@ Write a concise analysis covering:
 }
 
 // ――― 11) Scanner ―――
+// ――― runScanner (dedup + clean returns) ―――
 async function runScanner(){
   scannerTbody.innerHTML = '';
   const filter = scannerFilter.value.trim().toUpperCase();
-  const list   = filter
+  let list = filter
     ? symbols.filter(s => s.includes(filter))
-    : symbols;
+    : symbols.slice();  // copy so we can mutate
 
+  // dedupe
+  const seen = new Set();
+  list = list.filter(s => {
+    if (seen.has(s)) return false;
+    seen.add(s);
+    return true;
+  });
+
+  const carry = getPositiveCarryFX();
   let count = 0;
+
   for (const sym of list) {
+    // if no filter, limit to first 20
     if (!filter && count >= 20) break;
 
-    // daily scan
+    // Daily
     await fetchAndDraw(sym, null, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
 
-    // hourly scan
+    // Hourly
     await fetchAndDraw(sym, null, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
 
-    // **only** skip when daily is Bullish **and** there's no Buy signal
-    if (!filter && sg === null && pb === false) {
-      // pb===false means daily is Bearish, sg===null means no Sell signal yet → skip
-      continue;
-    }
+    // Skip only when daily is BEARISH and there's no sell signal
+    if (!filter && sg === null && pb === false) continue;
 
-    // build row
-    let statusColor, statusText;
+    // Build status text
+    let statusText, statusColor;
     if (sg === true) {
       statusText  = 'Buy Signal confirmed';
       statusColor = 'green';
@@ -448,23 +457,28 @@ async function runScanner(){
       statusText  = 'Sell Signal confirmed';
       statusColor = 'red';
     } else {
-      // this is your "Wait for Buy Signal" _or_ "Wait for Sell Signal"
       statusText  = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal';
       statusColor = 'gray';
     }
 
-    // projected return logic…
+    // Projected return
     let proj = '—';
     if (
       cryptoSymbols.includes(sym) ||
       equitiesSymbols.includes(sym) ||
-      etfSymbols.includes(sym) ||
-      getPositiveCarryFX().includes(sym)
+      etfSymbols.includes(sym)   ||
+      carry.includes(sym)
     ) {
       const cagr = await getProjectedAnnualReturn(sym);
-      proj = cagr != null ? `${(cagr*100).toFixed(2)}%` : 'N/A';
+      // guard against NaN
+      if (typeof cagr === 'number' && !isNaN(cagr)) {
+        proj = `${(cagr*100).toFixed(2)}%`;
+      } else {
+        proj = 'N/A';
+      }
     }
 
+    // Append row
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${sym}</td>
@@ -477,6 +491,7 @@ async function runScanner(){
     count++;
   }
 }
+
 
 
 // ――― 12) Update Dashboard ―――
