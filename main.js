@@ -23,22 +23,19 @@ function saveCache(data) {
   } catch {}
 }
 
-// ――― 0.5) Rate‑limit detection ―――
-// ――― 0.5) Rate‑limit detection ―――
+// ――― 0.5) Rate‑limit detection & banner ―――
 let rateLimited = false;
 axios.interceptors.response.use(
   res => res,
   err => {
     if (err.response?.status === 429 && !rateLimited) {
       rateLimited = true;
-      // show banner
       const b = document.getElementById('rateLimitBanner');
       if (b) b.style.display = 'block';
     }
     return Promise.reject(err);
   }
 );
-
 
 // ――― 1) Config & State ―――
 const cryptoSymbols   = ['BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT','SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'];
@@ -96,80 +93,83 @@ function rsi(arr,p){ const gains=[], losses=[], out=[];
 
 // ――― 4) Interest Rates ―――
 function toTDSymbol(sym){
-  if(cryptoSymbols.includes(sym)) return null;
-  if(forexSymbols.includes(sym)) return `${sym.slice(0,3)}/${sym.slice(3)}`;
+  if (cryptoSymbols.includes(sym))   return null;
+  if (forexSymbols.includes(sym))    return `${sym.slice(0,3)}/${sym.slice(3)}`;
+  if (equitiesSymbols.includes(sym)) return sym + '.US';
   return sym;
 }
 async function loadInterestRates(){
   try {
     const r = await fetch('/interestRates.json');
     interestRates = await r.json();
-  } catch { interestRates = {}; }
+  } catch {
+    interestRates = {};
+  }
 }
 function getPositiveCarryFX(){
   return forexSymbols.filter(sym=>{
-    const b=sym.slice(0,3), q=sym.slice(3);
+    const b = sym.slice(0,3), q = sym.slice(3);
     return (interestRates[b]||0) > (interestRates[q]||0);
   });
 }
 
 // ――― 5) Projected Annual Return ―――
 async function getProjectedAnnualReturn(sym){
-  if(projCache[sym]!==undefined) return projCache[sym];
-  if(cryptoSymbols.includes(sym)){
-    const sc=loadCache();
-    if(sc[sym]?.proj!=null) return projCache[sym]=sc[sym].proj;
+  if (projCache[sym] !== undefined) return projCache[sym];
+  if (cryptoSymbols.includes(sym)){
+    const sc = loadCache();
+    if (sc[sym]?.proj != null) return projCache[sym] = sc[sym].proj;
     try {
-      const resp = await axios.get('https://api.binance.com/api/v3/klines',{
-        params:{symbol:sym,interval:'1M',limit:60}
+      const resp = await axios.get('https://api.binance.com/api/v3/klines', {
+        params:{ symbol: sym, interval: '1M', limit: 60 }
       });
-      const d=resp.data;
-      const first=parseFloat(d[0][4]), last=parseFloat(d[d.length-1][4]);
-      const yrs=(d.length-1)/12, cagr=Math.pow(last/first,1/yrs)-1;
-      sc[sym]=sc[sym]||{}; sc[sym].proj=cagr; saveCache(sc);
-      return projCache[sym]=cagr;
+      const d = resp.data;
+      const first = parseFloat(d[0][4]), last = parseFloat(d[d.length-1][4]);
+      const yrs = (d.length-1)/12, cagr = Math.pow(last/first,1/yrs)-1;
+      sc[sym] = sc[sym]||{}; sc[sym].proj = cagr; saveCache(sc);
+      return projCache[sym] = cagr;
     } catch {
-      return projCache[sym]=null;
+      return projCache[sym] = null;
     }
   }
-  return projCache[sym]=null;
+  return projCache[sym] = null;
 }
 
 // ――― 6) fetchAndRender (with shared cache & rate‑limit fallback) ―――
 async function fetchAndRender(symbol, interval, containerId){
   const sc = loadCache();
-  sc[symbol] = sc[symbol] || {};
+  sc[symbol] = sc[symbol]||{};
   let data = sc[symbol][interval];
 
   if (!data && !rateLimited) {
     try {
       if (cryptoSymbols.includes(symbol)) {
-        const r = await axios.get('https://api.binance.com/api/v3/klines',{
-          params:{symbol,interval,limit:1000}
+        const r = await axios.get('https://api.binance.com/api/v3/klines', {
+          params:{ symbol, interval, limit: 1000 }
         });
         data = r.data.map(k=>({
-          time:k[0]/1000,
-          open:+k[1], high:+k[2],
-          low:+k[3], close:+k[4]
+          time: k[0]/1000,
+          open: +k[1], high: +k[2],
+          low:  +k[3], close: +k[4]
         }));
       } else {
         const tdInt = interval==='1d'?'1day':'1h';
-        const tdSym = toTDSymbol(symbol)||symbol;
-        const r = await axios.get('https://api.twelvedata.com/time_series',{
-          params:{symbol:tdSym,interval:tdInt,outputsize:2200,apikey:API_KEY}
+        const tdSym = toTDSymbol(symbol) || symbol;
+        const r = await axios.get('https://api.twelvedata.com/time_series', {
+          params:{ symbol: tdSym, interval: tdInt, outputsize: 2200, apikey: API_KEY }
         });
         const vals = r.data.values||[];
         data = vals.map(v=>({
-          time:Math.floor(new Date(v.datetime).getTime()/1000),
-          open:+v.open, high:+v.high,
-          low:+v.low, close:+v.close
+          time: Math.floor(new Date(v.datetime).getTime()/1000),
+          open: +v.open, high: +v.high,
+          low:  +v.low, close: +v.close
         })).reverse();
       }
       sc[symbol][interval] = data;
       saveCache(sc);
     } catch(e) {
       if (rateLimited) {
-        outPre.textContent = '⚠️ Rate limit reached, showing cached data.';
+        outPre.textContent = '⚠️ Twelve Data rate limit reached—showing cached data.';
       } else {
         console.error(e);
         outPre.textContent = `Fetch error: ${e.message}`;
@@ -178,40 +178,49 @@ async function fetchAndRender(symbol, interval, containerId){
     }
   }
 
-  // render base
+  // render base chart
   const c = document.getElementById(containerId);
   c.innerHTML = '';
-  const chart = LightweightCharts.createChart(c,{
-    layout:{textColor:'#000'},
-    rightPriceScale:{scaleMargins:{top:0.3,bottom:0.1}},
-    timeScale:{timeVisible:true,secondsVisible:false}
+  const chart = LightweightCharts.createChart(c, {
+    layout:           { textColor: '#000' },
+    rightPriceScale:  { scaleMargins: { top: 0.3, bottom: 0.1 } },
+    timeScale:        { timeVisible: true, secondsVisible: false }
   });
   const series = chart.addCandlestickSeries();
   series.setData(data);
   charts[containerId] = { chart, series, data };
 
-  // overlays: EMA / SMA
-  if (interval==='1d') {
-    const arr = ema(data.map(d=>d.close),45);
-    chart.addLineSeries({ lineWidth:2 })
-         .setData(data.map((d,i)=>({time:d.time,value:arr[i]})).filter(p=>p.value!=null));
+  // overlays: 45‑EMA on daily, 50/200 SMA on hourly
+  if (interval === '1d') {
+    const arr = ema(data.map(d=>d.close), 45);
+    chart.addLineSeries({ lineWidth: 2 })
+         .setData(data.map((d,i)=>({ time: d.time, value: arr[i] }))
+                     .filter(p=>p.value != null));
     charts[containerId].emaArr = arr;
   } else {
     const opens = data.map(d=>d.open);
-    const s50 = sma(opens,50), s200 = sma(opens,200);
-    chart.addLineSeries({ lineWidth:2 })
-         .setData(data.map((d,i)=>({time:d.time,value:s50[i]})).filter(p=>p.value!=null));
-    chart.addLineSeries({ lineWidth:2 })
-         .setData(data.map((d,i)=>({time:d.time,value:s200[i]})).filter(p=>p.value!=null));
-    charts[containerId].sma50 = s50;
-    charts[containerId].sma200 = s200;
+    const s50   = sma(opens, 50), s200 = sma(opens, 200);
+    chart.addLineSeries({ lineWidth: 2 })
+         .setData(data.map((d,i)=>({ time: d.time, value: s50[i] }))
+                     .filter(p=>p.value != null));
+    chart.addLineSeries({ lineWidth: 2 })
+         .setData(data.map((d,i)=>({ time: d.time, value: s200[i] }))
+                     .filter(p=>p.value != null));
+    charts[containerId].sma50   = s50;
+    charts[containerId].sma200  = s200;
   }
 
   // annotations
   drawFibsOnChart(containerId);
-  if (interval==='1d') drawEMAandProbability(containerId);
-  if (interval==='1h') drawRSIandSignal(containerId, drawEMAandProbability('dailyChart'));
+  if (interval === '1d') drawEMAandProbability(containerId);
+  if (interval === '1h') drawRSIandSignal(containerId, drawEMAandProbability('dailyChart'));
 }
+
+// ――― 7) drawFibsOnChart ―――
+function drawFibsOnChart(cid) {
+  // … your existing drawFibsOnChart code …
+}
+
 
 // ――― 7) drawFibsOnChart ―――
 function drawFibsOnChart(cid) {
