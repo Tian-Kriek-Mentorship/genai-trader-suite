@@ -41,15 +41,6 @@
       height: 700px;
       margin-top: 0.5rem;
     }
-    .summary-block { margin-bottom: 1rem; }
-    .explanation {
-      font-size: 22px;
-      line-height: 1.7;
-      max-width: 800px;
-      margin-top: 2rem;
-    }
-    .explanation ul { margin-top: 0.5rem; padding-left: 1.4rem; }
-    .explanation li { margin-bottom: 0.75rem; }
     #scannerTable {
       width: 100%;
       border-collapse: collapse;
@@ -61,28 +52,38 @@
       text-align: left;
     }
     #scannerTable th { background-color: #f0f0f0; }
+    .explanation {
+      font-size: 22px;
+      line-height: 1.7;
+      max-width: 800px;
+      margin-top: 2rem;
+    }
+    .explanation ul { margin-top: 0.5rem; padding-left: 1.4rem; }
+    .explanation li { margin-bottom: 0.75rem; }
   </style>
 </head>
 <body>
   <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
 
   <div style="margin-bottom: 1rem;">
-    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">Select Symbol:</label>
+    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">
+      Select Symbol:
+    </label>
     <select id="symbolSelect"></select>
   </div>
 
-  <div class="summary-block">
+  <div>
     <button id="aiBtn">AI Summary</button>
     <pre id="out"></pre>
   </div>
 
   <div class="charts-container">
     <div class="chart-block">
-      <h2 id="dailyTitle">BTCUSDT — Daily</h2>
+      <h2 id="dailyTitle">BTCUSDT — Daily</h2>
       <div id="dailyChart"></div>
     </div>
     <div class="chart-block">
-      <h2 id="hourlyTitle">BTCUSDT — 1 Hour</h2>
+      <h2 id="hourlyTitle">BTCUSDT — 1 Hour</h2>
       <div id="hourlyChart"></div>
     </div>
   </div>
@@ -91,7 +92,12 @@
   <input id="scannerFilter" placeholder="Filter symbols…" />
   <table id="scannerTable">
     <thead>
-      <tr><th>Symbol</th><th>Probability</th><th>Signal</th><th>H1 Target</th></tr>
+      <tr>
+        <th>Symbol</th>
+        <th>Probability</th>
+        <th>Signal</th>
+        <th>H1 Target</th>
+      </tr>
     </thead>
     <tbody></tbody>
   </table>
@@ -126,12 +132,12 @@
     </ul>
   </div>
 
-  <!-- load globals -->
+  <!-- libraries -->
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-  <!-- inject your Twelve Data key -->
+  <!-- Twelve Data key -->
   <script>window.TD_API_KEY = '1eed79e08f4a4d6092a9b4e634c3bbf8';</script>
-  <!-- load the app -->
+  <!-- main app -->
   <script type="module" src="/main.js"></script>
 </body>
 </html>
