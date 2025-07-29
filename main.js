@@ -338,38 +338,68 @@ function drawEMAandProbability(cid){
 }
 
 // ――― 9) drawRSIandSignal ―――
-function drawRSIandSignal(cid,dailyBullish){
-  const e=charts[cid];
-  if(!e||!e.data) return null;
-  const arr = rsi(e.data.map(d=>d.close),13);
-  const val = arr[arr.length-1];
-  const valid = arr.filter(v=>v!=null);
-  const maVal = sma(valid,14).slice(-1)[0];
-  let txt,clr;
-  if(dailyBullish){
-    if(val<50&&val>maVal){ txt='Buy Signal confirmed'; clr='green'; }
-    else                { txt='Wait for Buy Signal';   clr='gray';  }
-  } else {
-    txt='Sell Signal confirmed'; clr='red';
-  }
-  const id=`${cid}-rsi`;
-  let div=document.getElementById(id);
-  if(!div){
-    div=document.createElement('div');
-    div.id=id;
-    Object.assign(div.style,{
-      position:'absolute',top:'28px',left:'8px',
-      zIndex:'20',fontSize:'16px',fontWeight:'bold',
-      whiteSpace:'pre',pointerEvents:'none'
+
+function drawRSIandSignal(cid, dailyBullish) {
+  const e = charts[cid];
+  if (!e || !e.data) return null;
+
+  // compute current RSI(13) and its 14‑period SMA
+  const closes = e.data.map(d => d.close);
+  const arr    = rsi(closes, 13);
+  const val    = arr[arr.length - 1];
+  const valid  = arr.filter(v => v != null);
+  const maVal  = sma(valid, 14).slice(-1)[0];
+
+  const id = `${cid}-rsi`;
+  let div = document.getElementById(id);
+  if (!div) {
+    div = document.createElement('div');
+    div.id = id;
+    Object.assign(div.style, {
+      position: 'absolute',
+      top:      '28px',
+      left:     '8px',
+      zIndex:   '20',
+      fontSize: '16px',
+      fontWeight: 'bold',
+      whiteSpace: 'pre',
+      pointerEvents: 'none'
     });
     document.getElementById(cid).appendChild(div);
   }
-  div.style.color=clr;
-  div.textContent=`RSI: ${val.toFixed(2)}\n${txt}`;
-  return dailyBullish 
-    ? txt.startsWith('Buy')
-    : txt.startsWith('Sell');
+
+  let text, color, signal = null;
+
+  if (dailyBullish) {
+    // only buy signals when daily says Bullish
+    if (val < 50 && val > maVal) {
+      text  = 'Buy Signal confirmed';
+      color = 'green';
+      signal= true;
+    } else {
+      text  = 'Wait for Buy Signal';
+      color = 'gray';
+      signal= null;
+    }
+  } else {
+    // when daily is Bearish, only sell
+    if (val > 50 && val < maVal) {
+      text  = 'Sell Signal confirmed';
+      color = 'red';
+      signal= false;
+    } else {
+      text  = 'Wait for Sell Signal';
+      color = 'gray';
+      signal= null;
+    }
+  }
+
+  div.style.color = color;
+  div.textContent = `RSI: ${val.toFixed(2)}\n${text}`;
+
+  return signal;
 }
+
 
 // ――― 10) generateAISummary ―――
 async function generateAISummary(){
