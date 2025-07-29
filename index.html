@@ -66,7 +66,9 @@
   <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
 
   <div style="margin-bottom: 1rem;">
-    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">Select Symbol:</label>
+    <label for="symbolSelect" style="font-size:22px; margin-right:0.5rem;">
+      Select Symbol:
+    </label>
     <select id="symbolSelect"></select>
   </div>
 
@@ -90,7 +92,12 @@
   <input id="scannerFilter" placeholder="Filter symbols…" />
   <table id="scannerTable">
     <thead>
-      <tr><th>Symbol</th><th>Probability</th><th>Signal</th><th>H1 Target</th></tr>
+      <tr>
+        <th>Symbol</th>
+        <th>Probability</th>
+        <th>Signal</th>
+        <th>H1 Target</th>
+      </tr>
     </thead>
     <tbody></tbody>
   </table>
@@ -125,12 +132,12 @@
     </ul>
   </div>
 
-  <!-- libs -->
+  <!-- libraries -->
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
   <!-- inject your Twelve Data key -->
   <script>window.TD_API_KEY = '1eed79e08f4a4d6092a9b4e634c3bbf8';</script>
-  <!-- main app -->
+  <!-- main application -->
   <script type="module" src="/main.js"></script>
 </body>
 </html>
