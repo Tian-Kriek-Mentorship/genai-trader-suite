@@ -92,12 +92,14 @@ function rsi(arr,p){ const gains=[], losses=[], out=[];
 }
 
 // ――― 4) Interest Rates ―――
-function toTDSymbol(sym){
-  if (cryptoSymbols.includes(sym))   return null;
-  if (forexSymbols.includes(sym))    return `${sym.slice(0,3)}/${sym.slice(3)}`;
-  if (equitiesSymbols.includes(sym)) return sym + '.US';
+function toTDSymbol(sym) {
+  if (cryptoSymbols.includes(sym))      return null;
+  if (forexSymbols.includes(sym))       return `${sym.slice(0,3)}/${sym.slice(3)}`;
+  // 👇 For stocks & ETFs, just use the plain symbol:
+  if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) return sym;
   return sym;
 }
+
 async function loadInterestRates(){
   try {
     const r = await fetch('/interestRates.json');
