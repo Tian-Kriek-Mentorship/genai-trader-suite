@@ -1,35 +1,55 @@
+// main.js
+
+// ――― 0) Shared localStorage Cache (30 min) ―――
+const CACHE_KEY = 'gtm_cache';
+const CACHE_TTL = 30 * 60 * 1000;
+function loadCache() {
+  try {
+    const s = localStorage.getItem(CACHE_KEY);
+    if (!s) return {};
+    const o = JSON.parse(s);
+    if (Date.now() - o.ts > CACHE_TTL) {
+      localStorage.removeItem(CACHE_KEY);
+      return {};
+    }
+    return o.data || {};
+  } catch {
+    return {};
+  }
+}
+function saveCache(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch {}
+}
+
+// ――― 0.5) Rate‑limit detection & banner ―――
+let rateLimited = false;
+axios.interceptors.response.use(
+  res => res,
+  err => {
+    if (err.response?.status === 429 && !rateLimited) {
+      rateLimited = true;
+      const b = document.getElementById('rateLimitBanner');
+      if (b) b.style.display = 'block';
+    }
+    return Promise.reject(err);
+  }
+);
+
 // ――― 1) Config & State ―――
-// read your key from the global window object
 const API_KEY = window.TD_API_KEY;
 console.log('🚀 TD API key is:', API_KEY);
 
-const cryptoSymbols   = [
-  'BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT',
-  'SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'
-];
-const forexSymbols    = [
-  'EURUSD','USDJPY','GBPUSD','USDCHF','USDCAD','AUDUSD','NZDUSD',
-  'EURGBP','EURJPY','EURCHF','EURCAD','EURNZD',
-  'GBPJPY','GBPCHF','GBPAUD','GBPCAD','GBPNZD',
-  'AUDJPY','AUDCAD','AUDCHF','AUDNZD',
-  'CADJPY','CADCHF','CADNZD',
-  'CHFJPY','NZDJPY','NZDCHF'
-];
-const equitiesSymbols = [
-  'AAPL','MSFT','NVDA','GOOG','META','AMZN','TSLA','BRK.B','UNH','JPM',
-  'V','MA','PG','HD','JNJ','BAC','PFE','CVX','XOM','KO'
-];
+const cryptoSymbols   = ['BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT','SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'];
+const forexSymbols    = ['EURUSD','USDJPY','GBPUSD','USDCHF','USDCAD','AUDUSD','NZDUSD','EURGBP','EURJPY','EURCHF','EURCAD','EURNZD','GBPJPY','GBPCHF','GBPAUD','GBPCAD','GBPNZD','AUDJPY','AUDCAD','AUDCHF','AUDNZD','CADJPY','CADCHF','CADNZD','CHFJPY','NZDJPY','NZDCHF'];
+const equitiesSymbols = ['AAPL','MSFT','NVDA','GOOG','META','AMZN','TSLA','BRK.B','UNH','JPM','V','MA','PG','HD','JNJ','BAC','PFE','CVX','XOM','KO'];
 const etfSymbols      = ['BITO','BLOK','BTF','IBIT','FBTC','GBTC','ETHE'];
-const symbols         = [
-  ...cryptoSymbols,
-  ...forexSymbols,
-  ...equitiesSymbols,
-  ...etfSymbols
-];
-const projCache       = {};
-let interestRates     = {};
-const charts          = {};
+const symbols         = [...cryptoSymbols, ...forexSymbols, ...equitiesSymbols, ...etfSymbols];
 
+const projCache    = {};
+let interestRates  = {};
+const charts       = {};
 
 // ――― 2) DOM refs ―――
 const symbolInput   = document.getElementById('symbolInput');
@@ -42,34 +62,51 @@ const scannerFilter = document.getElementById('scannerFilter');
 const scannerTbody  = document.querySelector('#scannerTable tbody');
 
 // ――― 3) Math Helpers ―――
-function ema(arr,p){ const k=2/(p+1), out=[], n=arr.length; let prev;
-  for(let i=0;i<n;i++){
-    if(i===p-1){ prev=arr.slice(0,p).reduce((a,b)=>a+b,0)/p; out[i]=prev; }
-    else if(i>=p){ prev=arr[i]*k+prev*(1-k); out[i]=prev; }
-    else out[i]=null;
+function ema(arr, p) {
+  const k = 2 / (p + 1), out = [], n = arr.length;
+  let prev;
+  for (let i = 0; i < n; i++) {
+    if (i === p - 1) {
+      prev = arr.slice(0, p).reduce((a, b) => a + b, 0) / p;
+      out[i] = prev;
+    } else if (i >= p) {
+      prev = arr[i] * k + prev * (1 - k);
+      out[i] = prev;
+    } else {
+      out[i] = null;
+    }
   }
   return out;
 }
-function sma(arr,p){ const out=[];
-  for(let i=0;i<arr.length;i++){
-    if(i<p-1){ out.push(null); continue; }
-    let s=0; for(let j=i-p+1;j<=i;j++) s+=arr[j];
-    out.push(s/p);
+
+function sma(arr, p) {
+  const out = [];
+  for (let i = 0; i < arr.length; i++) {
+    if (i < p - 1) {
+      out.push(null);
+      continue;
+    }
+    let sum = 0;
+    for (let j = i - p + 1; j <= i; j++) sum += arr[j];
+    out.push(sum / p);
   }
   return out;
 }
-function rsi(arr,p){ const gains=[], losses=[], out=[];
-  for(let i=1;i<arr.length;i++){
-    const d=arr[i]-arr[i-1];
-    gains.push(d>0?d:0); losses.push(d<0?-d:0);
+
+function rsi(arr, p) {
+  const gains = [], losses = [], out = [];
+  for (let i = 1; i < arr.length; i++) {
+    const d = arr[i] - arr[i - 1];
+    gains.push(d > 0 ? d : 0);
+    losses.push(d < 0 ? -d : 0);
   }
-  let avgG=gains.slice(0,p).reduce((a,b)=>a+b,0)/p;
-  let avgL=losses.slice(0,p).reduce((a,b)=>a+b,0)/p;
-  out[p]=100-100/(1+avgG/avgL);
-  for(let i=p+1;i<arr.length;i++){
-    avgG=(avgG*(p-1)+gains[i-1])/p;
-    avgL=(avgL*(p-1)+losses[i-1])/p;
-    out[i]=100-100/(1+avgG/avgL);
+  let avgG = gains.slice(0, p).reduce((a, b) => a + b, 0) / p;
+  let avgL = losses.slice(0, p).reduce((a, b) => a + b, 0) / p;
+  out[p] = 100 - 100 / (1 + avgG / avgL);
+  for (let i = p + 1; i < arr.length; i++) {
+    avgG = (avgG * (p - 1) + gains[i - 1]) / p;
+    avgL = (avgL * (p - 1) + losses[i - 1]) / p;
+    out[i] = 100 - 100 / (1 + avgG / avgL);
   }
   return out;
 }
@@ -78,12 +115,10 @@ function rsi(arr,p){ const gains=[], losses=[], out=[];
 function toTDSymbol(sym) {
   if (cryptoSymbols.includes(sym))      return null;
   if (forexSymbols.includes(sym))       return `${sym.slice(0,3)}/${sym.slice(3)}`;
-  // 👇 For stocks & ETFs, just use the plain symbol:
-  if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) return sym;
-  return sym;
+  return sym; // stocks & ETFs use plain symbol
 }
 
-async function loadInterestRates(){
+async function loadInterestRates() {
   try {
     const r = await fetch('/interestRates.json');
     interestRates = await r.json();
@@ -91,17 +126,18 @@ async function loadInterestRates(){
     interestRates = {};
   }
 }
-function getPositiveCarryFX(){
-  return forexSymbols.filter(sym=>{
+
+function getPositiveCarryFX() {
+  return forexSymbols.filter(sym => {
     const b = sym.slice(0,3), q = sym.slice(3);
     return (interestRates[b]||0) > (interestRates[q]||0);
   });
 }
 
 // ――― 5) Projected Annual Return ―――
-async function getProjectedAnnualReturn(sym){
+async function getProjectedAnnualReturn(sym) {
   if (projCache[sym] !== undefined) return projCache[sym];
-  if (cryptoSymbols.includes(sym)){
+  if (cryptoSymbols.includes(sym)) {
     const sc = loadCache();
     if (sc[sym]?.proj != null) return projCache[sym] = sc[sym].proj;
     try {
@@ -120,15 +156,13 @@ async function getProjectedAnnualReturn(sym){
   return projCache[sym] = null;
 }
 
-// ――― 6) fetchAndRender (with shared cache & rate‑limit fallback) ―――
-async function fetchAndRender(symbol, interval, containerId){
+// ――― 6) fetchAndRender (with cache & rate‑limit fallback) ―――
+async function fetchAndRender(symbol, interval, containerId) {
   const sc = loadCache();
   sc[symbol] = sc[symbol]||{};
   let data = sc[symbol][interval];
 
-  // always fetch crypto (Binance), but gate Twelve Data by rateLimited
-if (!data && (cryptoSymbols.includes(symbol) || !rateLimited)) {
-
+  if (!data && (cryptoSymbols.includes(symbol) || !rateLimited)) {
     try {
       if (cryptoSymbols.includes(symbol)) {
         const r = await axios.get('https://api.binance.com/api/v3/klines', {
@@ -136,20 +170,21 @@ if (!data && (cryptoSymbols.includes(symbol) || !rateLimited)) {
         });
         data = r.data.map(k=>({
           time: k[0]/1000,
-          open: +k[1], high: +k[2],
-          low:  +k[3], close: +k[4]
+          open:+k[1], high:+k[2],
+          low: +k[3], close:+k[4]
         }));
       } else {
-        const tdInt = interval==='1d'?'1day':'1h';
-        const tdSym = toTDSymbol(symbol) || symbol;
+        const tdInt = interval==='1d' ? '1day' : '1h';
+        const tdSym = toTDSymbol(symbol);
         const r = await axios.get('https://api.twelvedata.com/time_series', {
           params:{ symbol: tdSym, interval: tdInt, outputsize: 2200, apikey: API_KEY }
         });
+        if (r.data.status === 'error') throw new Error(r.data.message);
         const vals = r.data.values||[];
         data = vals.map(v=>({
           time: Math.floor(new Date(v.datetime).getTime()/1000),
-          open: +v.open, high: +v.high,
-          low:  +v.low, close: +v.close
+          open:+v.open, high:+v.high,
+          low: +v.low, close:+v.close
         })).reverse();
       }
       sc[symbol][interval] = data;
@@ -165,7 +200,7 @@ if (!data && (cryptoSymbols.includes(symbol) || !rateLimited)) {
     }
   }
 
-  // render base chart
+  // render chart
   const c = document.getElementById(containerId);
   c.innerHTML = '';
   const chart = LightweightCharts.createChart(c, {
@@ -177,36 +212,35 @@ if (!data && (cryptoSymbols.includes(symbol) || !rateLimited)) {
   series.setData(data);
   charts[containerId] = { chart, series, data };
 
-  // overlays: 45‑EMA on daily, 50/200 SMA on hourly
+  // overlays
   if (interval === '1d') {
-    const arr = ema(data.map(d=>d.close), 45);
+    const arr = ema(data.map(d=>d.close),45);
     chart.addLineSeries({ lineWidth: 2 })
-         .setData(data.map((d,i)=>({ time: d.time, value: arr[i] }))
-                     .filter(p=>p.value != null));
+         .setData(data.map((d,i)=>({ time:d.time, value:arr[i] }))
+                     .filter(p=>p.value!=null));
     charts[containerId].emaArr = arr;
   } else {
     const opens = data.map(d=>d.open);
-    const s50   = sma(opens, 50), s200 = sma(opens, 200);
+    const s50   = sma(opens,50), s200 = sma(opens,200);
     chart.addLineSeries({ lineWidth: 2 })
-         .setData(data.map((d,i)=>({ time: d.time, value: s50[i] }))
-                     .filter(p=>p.value != null));
+         .setData(data.map((d,i)=>({ time:d.time, value:s50[i] }))
+                     .filter(p=>p.value!=null));
     chart.addLineSeries({ lineWidth: 2 })
-         .setData(data.map((d,i)=>({ time: d.time, value: s200[i] }))
-                     .filter(p=>p.value != null));
-    charts[containerId].sma50   = s50;
-    charts[containerId].sma200  = s200;
+         .setData(data.map((d,i)=>({ time:d.time, value:s200[i] }))
+                     .filter(p=>p.value!=null));
   }
 
-  // annotations
+  // annotations & labels
   drawFibsOnChart(containerId);
-  if (interval === '1d') drawEMAandProbability(containerId);
-  if (interval === '1h') drawRSIandSignal(containerId, drawEMAandProbability('dailyChart'));
+  if (interval==='1d') drawEMAandProbability(containerId);
+  if (interval==='1h') drawRSIandSignal(containerId, drawEMAandProbability('dailyChart'));
 }
 
-
-
 // ――― 7) drawFibsOnChart ―――
-function drawFibsOnChart(cid) {
+function drawFibsOnChart(cid){
+  // … your existing fib code …
+}
+
   const e=charts[cid]; if(!e?.data?.length) return;
   const {chart,series,data}=e;
   const opens=data.map(d=>d.open), m50=sma(opens,50), m200=sma(opens,200);
