@@ -378,15 +378,36 @@ async function updateDashboard(){
 }
 
 // ――― 13) init ―――
-(async function init(){
+(async function init() {
+  // 1) Load FX interest rates
   await loadInterestRates();
-  symbols.forEach(s=>{
-    const o=document.createElement('option');
-    o.value=s; datalistEl.appendChild(o);
+
+  // 2) Create hidden off‑screen divs for the scanner to render into
+  ['scannerTempDaily','scannerTempHourly'].forEach(id => {
+    if (!document.getElementById(id)) {
+      const d = document.createElement('div');
+      d.id = id;
+      d.style.display = 'none';
+      document.body.appendChild(d);
+    }
   });
-  symbolInput.value=cryptoSymbols[0];
-  symbolInput.addEventListener('input',updateDashboard);
-  aiBtn.addEventListener('click',generateAISummary);
-  scannerFilter.addEventListener('input',runScanner);
+
+  // 3) Populate the symbol dropdown (datalist)
+  symbols.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s;
+    datalistEl.appendChild(o);
+  });
+
+  // 4) Set initial symbol and wire events
+  symbolInput.value = cryptoSymbols[0];
+  symbolInput.addEventListener('input', () => {
+    if (symbols.includes(symbolInput.value)) updateDashboard();
+  });
+  aiBtn.addEventListener('click', generateAISummary);
+  scannerFilter.addEventListener('input', runScanner);
+
+  // 5) Kick off the first render
   updateDashboard();
 })();
+
