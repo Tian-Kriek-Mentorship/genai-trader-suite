@@ -10,10 +10,9 @@ const forexSymbols = [
   'USDCAD','USDCHF','NZDUSD'
 ];
 const symbols = [...cryptoSymbols, ...forexSymbols];
-
-const API_KEY = window.TD_API_KEY;
-const tdCache = {};
-const charts  = {};
+const API_KEY  = window.TD_API_KEY;
+const tdCache  = {};
+const charts   = {};
 
 // ――― 2) DOM refs ―――
 const symbolSelect  = document.getElementById('symbolSelect');
@@ -27,10 +26,9 @@ const scannerTbody  = document.querySelector('#scannerTable tbody');
 // ――― 3) Helpers ―――
 function toTDSymbol(sym) {
   if (sym.endsWith('USDT')) {
-    return `${sym.slice(0, sym.length-4)}/USDT`;
+    return `${sym.slice(0,sym.length-4)}/USDT`;
   }
-  const base = sym.slice(0,3), quote = sym.slice(3);
-  return `${base}/${quote}`;
+  return `${sym.slice(0,3)}/${sym.slice(3)}`;
 }
 
 function ema(arr, p) {
@@ -53,7 +51,7 @@ function ema(arr, p) {
 function sma(arr, p) {
   const out = [];
   for (let i=0; i<arr.length; i++){
-    if (i<p-1) { out.push(null); continue; }
+    if (i < p-1) { out.push(null); continue; }
     let sum = 0;
     for (let j=i-p+1; j<=i; j++) sum += arr[j];
     out.push(sum/p);
@@ -72,8 +70,8 @@ function rsi(arr, p) {
   let avgL = losses.slice(0,p).reduce((a,b)=>a+b,0)/p;
   out[p] = 100 - (100/(1 + avgG/avgL));
   for (let i=p+1; i<arr.length; i++){
-    avgG = (avgG*(p-1)+gains[i-1])/p;
-    avgL = (avgL*(p-1)+losses[i-1])/p;
+    avgG = (avgG*(p-1) + gains[i-1]) / p;
+    avgL = (avgL*(p-1) + losses[i-1]) / p;
     out[i] = 100 - 100/(1 + avgG/avgL);
   }
   return out;
@@ -84,11 +82,12 @@ async function fetchAndDraw(symbol, _, interval, containerId) {
   let data = [];
 
   if (cryptoSymbols.includes(symbol)) {
-    // Binance
+    // Binance → crypto
     try {
-      const resp = await axios.get('https://api.binance.com/api/v3/klines', {
-        params: { symbol, interval, limit: 1000 }
-      });
+      const resp = await axios.get(
+        'https://api.binance.com/api/v3/klines',
+        { params:{ symbol, interval, limit:1000 } }
+      );
       data = resp.data.map(k=>({
         time:  k[0]/1000,
         open:  +k[1],
@@ -96,19 +95,30 @@ async function fetchAndDraw(symbol, _, interval, containerId) {
         low:   +k[3],
         close: +k[4]
       }));
-    } catch(e){ console.error(`Binance ${symbol}`,e); }
+    } catch(e) {
+      console.error(`Binance error for ${symbol}`, e);
+    }
+
   } else {
-    // Twelve Data
-    const tdSym = toTDSymbol(symbol);
-    const key   = `${tdSym}_${interval}`;
+    // Twelve Data → forex
+    const tdSym  = toTDSymbol(symbol);
+    const key    = `${tdSym}_${interval}`;
     if (tdCache[key]) {
       data = tdCache[key];
     } else {
       try {
-        const tdInt = interval==='1d' ? '1day' : '1h';
-        const resp  = await axios.get('https://api.twelvedata.com/time_series', {
-          params:{ symbol:tdSym, interval:tdInt, outputsize:500, apikey:API_KEY }
-        });
+        const tdInt = interval==='1d'?'1day':'1h';
+        const resp  = await axios.get(
+          'https://api.twelvedata.com/time_series',
+          {
+            params:{
+              symbol:     tdSym,
+              interval:   tdInt,
+              outputsize: 500,
+              apikey:     API_KEY
+            }
+          }
+        );
         const vals = resp.data.values||[];
         data = vals.map(v=>({
           time:  Math.floor(new Date(v.datetime).getTime()/1000),
@@ -117,7 +127,9 @@ async function fetchAndDraw(symbol, _, interval, containerId) {
           low:   +v.low,
           close: +v.close
         })).reverse();
-      } catch(e){ console.error(`TD ${tdSym}`,e); }
+      } catch(e) {
+        console.error(`Twelve Data error for ${tdSym}`, e);
+      }
       tdCache[key] = data;
     }
   }
@@ -133,6 +145,7 @@ async function fetchAndDraw(symbol, _, interval, containerId) {
   series.setData(data);
   charts[containerId] = { chart, series, data };
 
+  // 45‑EMA on daily
   if (interval==='1d') {
     const closes = data.map(d=>d.close),
           arr    = ema(closes,45),
@@ -144,34 +157,34 @@ async function fetchAndDraw(symbol, _, interval, containerId) {
   }
 }
 
-// ――― 5) Draw Fibs + Auto-Zoom + Label ―――
+// ――― 5) Draw Fibs + Auto‑Zoom + Label ―――
 function drawFibsOnChart(cid) {
   const e = charts[cid];
   if (!e || !e.data || e.data.length<5) return;
-  const { chart, series, data } = e,
-        o = data.map(d=>d.open),
-        h = data.map(d=>d.high),
-        l = data.map(d=>d.low),
+  const { chart, series, data } = e;
+  const o    = data.map(d=>d.open),
+        h    = data.map(d=>d.high),
+        l    = data.map(d=>d.low),
         m50  = sma(o,50),
         m200 = sma(o,200);
   let gc=-1, dc=-1;
   for (let i=1; i<o.length; i++){
-    if (m50[i]>m200[i] && m50[i-1]<=m200[i-1]) gc=i;
-    if (m50[i]<m200[i] && m50[i-1]>=m200[i-1]) dc=i;
+    if (m50[i]>m200[i]&&m50[i-1]<=m200[i-1]) gc=i;
+    if (m50[i]<m200[i]&&m50[i-1]>=m200[i-1]) dc=i;
   }
-  const up = gc>dc, idx = up?gc:dc;
+  const up  = gc>dc, idx=up?gc:dc;
   if (idx<2) return;
   let pre   = idx,
       start = ((up?dc:gc)>0?(up?dc:gc):0);
   for (let i=start; i<idx; i++){
-    if (up ? l[i]<l[pre] : h[i]>h[pre]) pre=i;
+    if (up?l[i]<l[pre]:h[i]>h[pre]) pre = i;
   }
   let post=-1;
   for (let i=idx+2; i<data.length-2; i++){
     const fh = h[i]>h[i-1]&&h[i]>h[i-2]&&h[i]>h[i+1]&&h[i]>h[i+2],
           fl = l[i]<l[i-1]&&l[i]<l[i-2]&&l[i]<l[i+1]&&l[i]<l[i+2];
-    if (up && fh)   { post=i; break; }
-    if (!up && fl)  { post=i; break; }
+    if (up&&fh){ post=i; break; }
+    if (!up&&fl){ post=i; break; }
   }
   if (post<0) return;
   const preP   = up?l[pre]:h[pre],
@@ -187,6 +200,7 @@ function drawFibsOnChart(cid) {
     else   { if (h[i]>=retr) touched=true; if (l[i]<=e127) moved127=true; }
   }
   const level = touched?e618:(!touched&&!moved127?e127:e2618);
+
   series.createPriceLine({
     price:            level,
     color:            'darkgreen',
@@ -194,7 +208,10 @@ function drawFibsOnChart(cid) {
     axisLabelVisible: true,
     title:            `Fibonacci Target: ${level.toFixed(4)}`
   });
-  e.fibTarget = level;
+
+  e.fibTarget    = level;
+  e.fibDirection = up ? 'up' : 'down';
+
   if (!e.zoomSeries) {
     e.zoomSeries = chart.addLineSeries({ color:'rgba(0,0,0,0)', lineWidth:0 });
   }
@@ -204,7 +221,7 @@ function drawFibsOnChart(cid) {
   ]);
 }
 
-// ――― 6) EMA & Probability Overlay ―――
+// ――― 6) EMA & Probability overlay ―――
 function drawEMAandProbability(cid) {
   const e = charts[cid];
   if (!e || !e.data || !e.emaArr) return false;
@@ -228,22 +245,41 @@ function drawEMAandProbability(cid) {
   return bull;
 }
 
-// ――― 7) RSI & H1 Signal Overlay ―――
-function drawRSIandSignal(cid,bullish) {
+// ――― 7) RSI & H1 Signal overlay (daily‐aligned) ―――
+function drawRSIandSignal(cid, dailyBullish) {
   const e = charts[cid];
   if (!e || !e.data) return null;
-  const arr   = rsi(e.data.map(d=>d.close),13),
-        val   = arr[arr.length-1],
-        valid = arr.filter(v=>v!=null),
-        maVal = sma(valid,14).slice(-1)[0];
-  let txt, clr, rtn=null;
-  if (bullish) {
-    if (val<50&&val>maVal) { txt='Buy Signal confirmed'; clr='green'; rtn=true; }
-    else                   { txt='Wait for Buy Signal';  clr='gray'; }
-  } else {
-    if (val>50&&val<maVal) { txt='Sell Signal confirmed';clr='red';   rtn=false; }
-    else                   { txt='Wait for Sell Signal';clr='gray';  }
+
+  // If daily says Bullish → only buy logic
+  if (dailyBullish) {
+    if (e.fibDirection==='down') {
+      _renderRSIDiv(cid, 'Wait for Buy Signal', 'gray');
+      return null;
+    }
+    const arr = rsi(e.data.map(d=>d.close),13),
+          val = arr[arr.length-1],
+          valid = arr.filter(v=>v!=null),
+          maVal = sma(valid,14).slice(-1)[0];
+    if (val<50 && val>maVal) {
+      _renderRSIDiv(cid, 'Buy Signal confirmed', 'green', val);
+      return true;
+    } else {
+      _renderRSIDiv(cid, 'Wait for Buy Signal', 'gray', val);
+      return null;
+    }
   }
+
+  // If daily says Bearish → only sell logic
+  if (e.fibDirection==='up') {
+    _renderRSIDiv(cid, 'Wait for Sell Signal', 'gray');
+    return null;
+  }
+  _renderRSIDiv(cid, 'Sell Signal confirmed', 'red');
+  return false;
+}
+
+// helper to render RSI div
+function _renderRSIDiv(cid, text, color, rsiValue) {
   const id = `${cid}-rsi`;
   let div = document.getElementById(id);
   if (!div) {
@@ -256,9 +292,10 @@ function drawRSIandSignal(cid,bullish) {
     });
     document.getElementById(cid).appendChild(div);
   }
-  div.style.color = clr;
-  div.textContent = `RSI: ${val.toFixed(2)}\n${txt}`;
-  return rtn;
+  div.style.color = color;
+  div.textContent = rsiValue!=null
+    ? `RSI: ${rsiValue.toFixed(2)}\n${text}`
+    : text;
 }
 
 // ――― 8) Enhanced AI Summary ―――
@@ -266,37 +303,34 @@ async function generateAISummary() {
   const sym = symbolSelect.value;
   outPre.textContent = `Loading AI summary for ${sym}…`;
 
-  // compute probability, signal, target
   const bull   = drawEMAandProbability('dailyChart');
   const sig    = drawRSIandSignal('hourlyChart', bull);
   const target = charts.hourlyChart?.fibTarget;
 
-  // fetch monthly data for avg return
   let avgRet = 'N/A';
   try {
     const tdSym = toTDSymbol(sym);
     const resp  = await axios.get('https://api.twelvedata.com/time_series', {
-      params: {
+      params:{
         symbol:     tdSym,
         interval:   '1month',
         outputsize: 60,
         apikey:     API_KEY
       }
     });
-    const vals = resp.data.values || [];
+    const vals = resp.data.values||[];
     const rets = [];
-    for (let i=1; i<vals.length; i++) {
-      const p = parseFloat(vals[i-1].close),
-            c = parseFloat(vals[i].close);
-      rets.push((c/p - 1)*100);
+    for (let i=1; i<vals.length; i++){
+      const p=parseFloat(vals[i-1].close),
+            c=parseFloat(vals[i].close);
+      rets.push((c/p-1)*100);
     }
     const avg = rets.reduce((a,b)=>a+b,0)/rets.length;
     avgRet = `${avg.toFixed(2)}%`;
-  } catch (e) {
+  } catch(e) {
     console.error('Monthly return error', e);
   }
 
-  // build prompt
   const prompt = `
 Symbol: ${sym}
 Probability (45‑EMA): ${bull?'Bullish':'Bearish'}
@@ -305,7 +339,7 @@ H1 Signal: ${
     sig===false ? 'Sell Signal confirmed' :
                    'Wait for signal'
   }
-Fibonacci Target: ${target!=null ? target.toFixed(4) : '—'}
+Fibonacci Target: ${target!=null?target.toFixed(4):'—'}
 Average monthly return (last 5 years): ${avgRet}
 
 Write a concise analysis covering:
@@ -317,8 +351,8 @@ Write a concise analysis covering:
   try {
     const aiResp = await axios.post('/api/ai', { prompt });
     const d = aiResp.data;
-    outPre.textContent = d.summary || d.text || JSON.stringify(d, null, 2);
-  } catch (e) {
+    outPre.textContent = d.summary||d.text||JSON.stringify(d,null,2);
+  } catch(e) {
     console.error('AI error', e);
     outPre.textContent = `❌ AI error: ${e.message}`;
   }
@@ -330,6 +364,7 @@ async function runScanner() {
   const filter = scannerFilter.value.trim().toUpperCase();
   const list   = filter?symbols.filter(s=>s.includes(filter)):symbols;
   let count = 0;
+
   for (const sym of list) {
     if (!filter && count>=20) break;
 
@@ -372,8 +407,8 @@ async function updateDashboard() {
   await fetchAndDraw(sym,'hourly','1h','hourlyChart');
   drawFibsOnChart('dailyChart');
   drawFibsOnChart('hourlyChart');
-  drawEMAandProbability('dailyChart');
-  drawRSIandSignal('hourlyChart', drawEMAandProbability('dailyChart'));
+  const dailyBull = drawEMAandProbability('dailyChart');
+  drawRSIandSignal('hourlyChart', dailyBull);
 
   await generateAISummary();
   await runScanner();
@@ -389,13 +424,13 @@ async function updateDashboard() {
     }
   });
 
-  cryptoSymbols.forEach(s=>
+  cryptoSymbols.forEach(s =>
     symbolSelect.append(new Option(s.replace('USDT','/USDT'), s))
   );
   const sep = new Option('────────── Forex Pairs ──────────','',false,false);
   sep.disabled = true;
   symbolSelect.append(sep);
-  forexSymbols.forEach(s=>
+  forexSymbols.forEach(s =>
     symbolSelect.append(new Option(s.slice(0,3)+'/'+s.slice(3), s))
   );
 
