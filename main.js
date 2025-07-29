@@ -1,5 +1,4 @@
 // main.js
-console.log('TwelveData API_KEY →', API_KEY);
 
 // ――― 0) Shared localStorage Cache (30 min) ―――
 const CACHE_KEY = 'gtm_cache';
@@ -37,6 +36,11 @@ axios.interceptors.response.use(
     return Promise.reject(err);
   }
 );
+
+// ――― 1) Config & State ―――
+const API_KEY = import.meta.env.VITE_TWELVEDATA_API_KEY;
+console.log('TwelveData API_KEY →', API_KEY);
+
 
 // ――― 1) Config & State ―――
 const cryptoSymbols   = ['BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT','ADAUSDT','SOLUSDT','DOGEUSDT','DOTUSDT','MATICUSDT','AVAXUSDT'];
