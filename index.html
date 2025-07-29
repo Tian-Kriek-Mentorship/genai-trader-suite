@@ -93,12 +93,7 @@
   <input id="scannerFilter" placeholder="Filter symbols…" />
   <table id="scannerTable">
     <thead>
-      <tr>
-        <th>Symbol</th>
-        <th>Probability</th>
-        <th>Signal</th>
-        <th>H1 Target</th>
-      </tr>
+      <tr><th>Symbol</th><th>Probability</th><th>Signal</th><th>H1 Target</th></tr>
     </thead>
     <tbody></tbody>
   </table>
@@ -133,12 +128,12 @@
     </ul>
   </div>
 
-  <!-- load globals -->
+  <!-- global libs -->
   <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-  <!-- inject updated Twelve Data key -->
+  <!-- your Twelve Data key -->
   <script>window.TD_API_KEY = '1eed79e08f4a4d6092a9b4e634c3bbf8';</script>
-  <!-- load app -->
+  <!-- application -->
   <script type="module" src="/main.js"></script>
 </body>
 </html>
