@@ -1,92 +1,68 @@
 // scanner.js
-import { 
-  symbols, 
-  cryptoSymbols, 
-  equitiesSymbols, 
-  etfSymbols,
-  loadCache,
-  saveCache,
-  fetchAndRender,
-  drawEMAandProbability,
-  drawRSIandSignal,
-  drawFibsOnChart,
-  getPositiveCarryFX,
-  getProjectedAnnualReturn
-} from './main.js';  // adjust path if needed
 
-// 1‑hour cache
-let lastScan = { ts: 0, data: [] };
+import axios from 'axios'
+import Bottleneck from 'bottleneck'
+import axiosRetry from 'axios-retry'
 
-function renderScannerRows(rows) {
-  const tbody = document.querySelector('#scannerTable tbody');
-  tbody.innerHTML = '';
-  rows.forEach(r => tbody.append(r));
-}
-
-export async function runScanner() {
-  const now = Date.now();
-  if (now - lastScan.ts < 60*60*1000) {
-    return renderScannerRows(lastScan.data);
+// —————————————————————————————————————————————
+// 1. Configure axios to retry on 429/5xx with exponential back‑off
+// —————————————————————————————————————————————
+axiosRetry(axios, {
+  retries: 3,                        // try up to 3 times
+  retryCondition: (error) => {
+    // only retry on 429 or 500–599
+    return axiosRetry.isNetworkOrIdempotentRequestError(error)
+        || error.response?.status === 429
+  },
+  retryDelay: (retryCount, error) => {
+    // exponential back‑off: 1s, 2s, 4s...
+    return 1000 * Math.pow(2, retryCount - 1)
   }
+})
 
-  const filter = document.getElementById('scannerFilter').value.trim().toUpperCase();
-  let list = filter
-    ? symbols.filter(s => s.includes(filter))
-    : symbols.slice();
+// —————————————————————————————————————————————
+// 2. Create a Bottleneck limiter
+//    Adjust maxConcurrent and minTime to fit your Twelve Data quota.
+//    For example, if you get 8 calls/min free tier => minTime ≈ 8_000ms.
+// —————————————————————————————————————————————
+const limiter = new Bottleneck({
+  maxConcurrent: 1,    // only one request at a time
+  minTime: 8_000       // wait ≥8s between calls (≈7.5 calls/min)
+})
 
-  // dedupe
-  list = Array.from(new Set(list));
-
-  const rows = [];
-  let count = 0;
-  for (const sym of list) {
-    if (!filter && count >= 20) break;
-
-    // daily
-    await fetchAndRender(sym, '1d', 'scannerTempDaily');
-    const pb = drawEMAandProbability('scannerTempDaily');
-
-    // hourly
-    await fetchAndRender(sym, '1h', 'scannerTempHourly');
-    drawFibsOnChart('scannerTempHourly');
-    const h1T = window.charts.scannerTempHourly?.fibTarget ?? '—';
-    const sg = drawRSIandSignal('scannerTempHourly', pb);
-
-    if (!filter && pb === false && sg === null) continue;
-
-    // status
-    let statusText, statusColor;
-    if (sg === true)      { statusText='Buy Signal confirmed';  statusColor='green'; }
-    else if (sg === false){ statusText='Sell Signal confirmed'; statusColor='red';   }
-    else                  { statusText=pb?'Wait for Buy Signal':'Wait for Sell Signal'; statusColor='gray'; }
-
-    // projected return
-    let proj = '—';
-    if (cryptoSymbols.includes(sym)) {
-      const c = await getProjectedAnnualReturn(sym);
-      proj = (typeof c === 'number')?`${(c*100).toFixed(2)}%`:'N/A';
-    } else if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) {
-      const bars = window.charts.scannerTempDaily.data;
-      if (bars.length > 1) {
-        const first=bars[0].close, last=bars[bars.length-1].close;
-        const yrs=(bars[bars.length-1].time-bars[0].time)/(365*24*60*60);
-        const cagr=Math.pow(last/first,1/yrs)-1;
-        proj=`${(cagr*100).toFixed(2)}%`;
-      } else proj='N/A';
+// Wrap your fetch so it goes through the limiter
+const fetchSeries = limiter.wrap(async (symbol) => {
+  const resp = await axios.get('https://api.twelvedata.com/time_series', {
+    params: {
+      symbol,
+      interval: '1h',
+      outputsize: 100,
+      apikey: import.meta.env.VITE_TWELVEDATA_API_KEY
     }
-
-    const tr = document.createElement('tr');
-    tr.innerHTML=`
-      <td>${sym}</td>
-      <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
-      <td style="color:${statusColor}">${statusText}</td>
-      <td>${(typeof h1T==='number'?h1T.toFixed(4):h1T)}</td>
-      <td style="text-align:right;">${proj}</td>
-    `;
-    rows.push(tr);
-    count++;
+  })
+  if (resp.data.status === 'error') {
+    throw new Error(`TD error for ${symbol}: ${resp.data.message}`)
   }
+  return { symbol, data: resp.data.values }
+})
 
-  lastScan = { ts: now, data: rows };
-  renderScannerRows(rows);
+// —————————————————————————————————————————————
+// 3. Batch up your symbols and fire them
+// —————————————————————————————————————————————
+export async function runScanner(symbols = []) {
+  const results = []
+  for (let i = 0; i < symbols.length; i += 5) {
+    const batch = symbols.slice(i, i + 5)
+    try {
+      const batchRes = await Promise.all(batch.map(fetchSeries))
+      results.push(...batchRes)
+    } catch (err) {
+      console.warn('Batch fetch error, continuing after delay:', err)
+      // Wait a bit longer on a hard failure
+      await new Promise((r) => setTimeout(r, 10_000))
+    }
+    // Optional extra delay between batches
+    await new Promise((r) => setTimeout(r, 5_000))
+  }
+  return results
 }
