@@ -464,7 +464,7 @@ async function runScanner() {
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // restore cache if no query and still fresh
+  // 1) try to restore from localStorage if we have a fresh, unfiltered cache
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
   if (!query && saved.ts && (now - saved.ts) < TTL) {
     lastScan = {
@@ -479,12 +479,16 @@ async function runScanner() {
     return;
   }
 
-  // otherwise build fresh list
+  // 2) otherwise, build a fresh scan list
   let list = query
     ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
+
+  // dedupe
   const seen = new Set();
   list = list.filter(s => !seen.has(s) && seen.add(s));
+
+  console.log('🔍 query:', query, '→ candidates:', list);
 
   const rows = [];
   let count = 0;
@@ -492,9 +496,11 @@ async function runScanner() {
   for (const sym of list) {
     if (!query && count >= 20) break;
 
-    // get rate data off-screen
+    // daily off‑screen
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
+
+    // hourly off‑screen
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
@@ -502,67 +508,57 @@ async function runScanner() {
 
     if (!query && pb === false && sg === null) continue;
 
-    // status text/color
+    // status cell
     let statusText, statusColor;
     if (sg === true)       { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
     // projected annual return
+    let proj = '—';
     const cagr = await getProjectedAnnualReturn(sym);
-    const projAnnual = typeof cagr === 'number'
-      ? `${(cagr * 100).toFixed(2)}%`
-      : '—';
+    if (typeof cagr === 'number') proj = `${(cagr * 100).toFixed(2)}%`;
 
-    // monthly return
-    let monthlyRet = '—';
-    let mRate = 0;
+    // monthly return = 12th root of (1 + cagr) minus 1
+    let monthly = '—';
     if (typeof cagr === 'number') {
-      mRate = Math.pow(1 + cagr, 1/12) - 1;
-      monthlyRet = `${(mRate * 100).toFixed(2)}%`;
+      const m = Math.pow(1 + cagr, 1/12) - 1;
+      monthly = (m * 100).toFixed(2) + '%';
     }
 
-    // build row with new columns
+    // build the <tr> with 1+1+1+1+1+1+1+1+12 = 20 tds
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${sym}</td>
-      <td style="color:${pb ? 'green' : 'red'}">${pb ? 'Bullish' : 'Bearish'}</td>
+      <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
       <td style="color:${statusColor}">${statusText}</td>
-      <td>${typeof h1T === 'number' ? h1T.toFixed(4) : h1T}</td>
-      <td style="text-align:right;">${projAnnual}</td>
-      <td style="text-align:right;">${monthlyRet}</td>
-      <td><input type="number" class="amount-invested" placeholder="0" style="width:6ch" /></td>
-      <td style="text-align:right;">0.00%</td> <!-- Portfolio Weight placeholder -->
-      ${[...Array(12).keys()].map(i =>
-        `<td class="month-${i+1}">—</td>`
+      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
+      <td style="text-align:right;">${proj}</td>
+
+      <!-- new columns -->
+      <td style="text-align:right;">${monthly}</td>
+      <td><input type="number" class="amount-invested" placeholder="0.00" /></td>
+      <td><input type="number" class="portfolio-weight" placeholder="%" /></td>
+
+      <!-- 12 future months -->
+      ${[...Array(12)].map((_,i) =>
+        `<td class="month-${i+1}"></td>`
       ).join('')}
     `;
-
-    // wire up the "Amount Invested" input to fill month‑1 profit
-    const amtInput = tr.querySelector('.amount-invested');
-    const monthCells = Array.from(tr.querySelectorAll('[class^=month-]'));
-    amtInput.addEventListener('input', () => {
-      const v = parseFloat(amtInput.value) || 0;
-      monthCells.forEach((cell, idx) => {
-        // profit for month N: principal * ((1+mRate)^N - 1)
-        const profit = v * (Math.pow(1 + mRate, idx + 1) - 1);
-        cell.textContent = profit ? profit.toFixed(2) : '—';
-      });
-    });
-
     rows.push(tr);
     count++;
   }
 
-  // cache & render
+  // 3) cache in-memory + persist
   lastScan = { ts: now, data: rows };
   localStorage.setItem('scanner_cache', JSON.stringify({
     ts: now,
     data: rows.map(tr => tr.innerHTML)
   }));
+
+  // 4) render into DOM
   renderScannerRows(rows);
 }
-
 
 
 // ――― 12) updateDashboard ―――
