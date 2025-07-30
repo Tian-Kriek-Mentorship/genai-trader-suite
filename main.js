@@ -47,6 +47,12 @@ const equitiesSymbols = ['AAPL','MSFT','NVDA','GOOG','META','AMZN','TSLA','BRK.B
 const etfSymbols      = ['BITO','BLOK','BTF','IBIT','FBTC','GBTC','ETHE'];
 const symbols         = [...cryptoSymbols, ...forexSymbols, ...equitiesSymbols, ...etfSymbols];
 
+// trimmed scan universe: top 20 crypto, top 50 stocks, top 27 FX
+const scanCrypto = cryptoSymbols.slice(0, 20);
+const scanStocks = equitiesSymbols.slice(0, 50);
+const scanForex  = forexSymbols.slice(0, 27);
+const scanSymbols = [...scanCrypto, ...scanStocks, ...scanForex];
+
 const projCache    = {};
 let interestRates  = {};
 const charts       = {};
@@ -82,10 +88,7 @@ function ema(arr, p) {
 function sma(arr, p) {
   const out = [];
   for (let i = 0; i < arr.length; i++) {
-    if (i < p - 1) {
-      out.push(null);
-      continue;
-    }
+    if (i < p - 1) { out.push(null); continue; }
     let sum = 0;
     for (let j = i - p + 1; j <= i; j++) sum += arr[j];
     out.push(sum / p);
@@ -113,11 +116,10 @@ function rsi(arr, p) {
 
 // ――― 4) Interest Rates ―――
 function toTDSymbol(sym) {
-  if (cryptoSymbols.includes(sym))      return null;
-  if (forexSymbols.includes(sym))       return `${sym.slice(0,3)}/${sym.slice(3)}`;
-  return sym; // stocks & ETFs use plain symbol
+  if (cryptoSymbols.includes(sym)) return null;
+  if (forexSymbols.includes(sym))  return `${sym.slice(0,3)}/${sym.slice(3)}`;
+  return sym;
 }
-
 async function loadInterestRates() {
   try {
     const r = await fetch('/interestRates.json');
@@ -126,7 +128,6 @@ async function loadInterestRates() {
     interestRates = {};
   }
 }
-
 function getPositiveCarryFX() {
   return forexSymbols.filter(sym => {
     const b = sym.slice(0,3), q = sym.slice(3);
@@ -151,6 +152,16 @@ async function getProjectedAnnualReturn(sym) {
       return projCache[sym] = cagr;
     } catch {
       return projCache[sym] = null;
+    }
+  }
+  if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) {
+    // approximate via daily chart data
+    const bars = charts['scannerTempDaily']?.data;
+    if (bars?.length > 1) {
+      const first = bars[0].close, last = bars[bars.length-1].close;
+      const yrs = (bars[bars.length-1].time - bars[0].time)/(365*24*60*60);
+      const cagr = Math.pow(last/first,1/yrs)-1;
+      return projCache[sym] = cagr;
     }
   }
   return projCache[sym] = null;
@@ -230,144 +241,154 @@ async function fetchAndRender(symbol, interval, containerId) {
                      .filter(p=>p.value!=null));
   }
 
-  // annotations & labels
+  // labels & signals
   drawFibsOnChart(containerId);
   if (interval==='1d') drawEMAandProbability(containerId);
   if (interval==='1h') drawRSIandSignal(containerId, drawEMAandProbability('dailyChart'));
 }
 
 // ――― 7) drawFibsOnChart ―――
-function drawFibsOnChart(cid){
-
-  const e=charts[cid]; if(!e?.data?.length) return;
-  const {chart,series,data}=e;
-  const opens=data.map(d=>d.open), m50=sma(opens,50), m200=sma(opens,200);
-  let lastGC=-1,lastDC=-1;
-  for(let i=1;i<opens.length;i++){
-    if(m50[i]>m200[i]&&m50[i-1]<=m200[i-1]) lastGC=i;
-    if(m50[i]<m200[i]&&m50[i-1]>=m200[i-1]) lastDC=i;
+function drawFibsOnChart(cid) {
+  const e = charts[cid];
+  if (!e?.data?.length) return;
+  const { chart, series, data } = e;
+  const opens = data.map(d=>d.open), m50 = sma(opens,50), m200 = sma(opens,200);
+  let lastGC=-1, lastDC=-1;
+  for (let i=1; i<opens.length; i++) {
+    if (m50[i]>m200[i] && m50[i-1]<=m200[i-1]) lastGC=i;
+    if (m50[i]<m200[i] && m50[i-1]>=m200[i-1]) lastDC=i;
   }
-  const isUp=lastGC>lastDC, cross=isUp?lastGC:lastDC;
-  if(cross<2) return;
-
-  const findPre=(st,en)=>{let idx=en;
-    for(let i=st;i<=en;i++){
-      if(isUp?data[i].low<data[idx].low:data[i].high>data[idx].high) idx=i;
+  const isUp = lastGC>lastDC, cross = isUp?lastGC:lastDC;
+  if (cross<2) return;
+  // find swing low/high
+  const findPre = (st,en)=> {
+    let idx=en;
+    for (let i=st; i<=en; i++) {
+      if (isUp? data[i].low < data[idx].low : data[i].high > data[idx].high) idx=i;
     }
     return idx;
   };
-  const findPost=from=>{for(let i=from+2;i<data.length-2;i++){
-    const fh=data[i].high>data[i-1].high&&data[i].high>data[i-2].high&&data[i].high>data[i+1].high&&data[i].high>data[i+2].high;
-    const fl=data[i].low<data[i-1].low&&data[i].low<data[i-2].low&&data[i].low<data[i+1].low&&data[i].low<data[i+2].low;
-    if(isUp&&fh) return i;
-    if(!isUp&&fl) return i;
-  } return -1;};
-
-  let preIdx=findPre(isUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0),cross),
-      postIdx=findPost(cross);
-  if(postIdx<0) return;
-
-  const computeTarget=(p,q)=>{const p0=isUp?data[p].low:data[p].high,p1=isUp?data[q].high:data[q].low,r=Math.abs(p1-p0),
-    lvl=isUp
-      ?{retr:p1-r*0.618,ext127:p1+r*0.27,ext618:p1+r*0.618,ext2618:p1+r*1.618}
-      :{retr:p1+r*0.618,ext127:p1-r*0.27,ext618:p1-r*0.618,ext2618:p1-r*1.618};
-    let touched=false,moved127=false;
-    for(let i=q+1;i<data.length;i++){
-      if(isUp){ if(data[i].low<=lvl.retr) touched=true; if(data[i].high>=lvl.ext127) moved127=true; }
-      else   { if(data[i].high>=lvl.retr) touched=true; if(data[i].low<=lvl.ext127) moved127=true; }
+  const findPost = from => {
+    for (let i=from+2; i<data.length-2; i++) {
+      const fh = data[i].high>data[i-1].high && data[i].high>data[i-2].high && data[i].high>data[i+1].high && data[i].high>data[i+2].high;
+      const fl = data[i].low<data[i-1].low && data[i].low<data[i-2].low && data[i].low<data[i+1].low && data[i].low<data[i+2].low;
+      if (isUp && fh) return i;
+      if (!isUp && fl) return i;
     }
-    return touched?lvl.ext618:(!touched&&!moved127?lvl.ext127:lvl.ext2618);
+    return -1;
   };
-
-  let target=computeTarget(preIdx,postIdx), lastClose=data[data.length-1].close;
-  while((isUp&&lastClose>=target)||(!isUp&&lastClose<=target)){
-    preIdx=postIdx;
-    postIdx=findPost(preIdx);
-    if(postIdx<0) break;
-    target=computeTarget(preIdx,postIdx);
+  let preIdx = findPre(isUp?(lastDC>0?lastDC:0):(lastGC>0?lastGC:0), cross);
+  let postIdx = findPost(cross);
+  if (postIdx<0) return;
+  // compute fib targets
+  const computeTarget = (p,q) => {
+    const p0 = isUp? data[p].low : data[p].high;
+    const p1 = isUp? data[q].high : data[q].low;
+    const r = Math.abs(p1-p0);
+    const lvl = isUp
+      ? { retr: p1 - r*0.618, ext127: p1 + r*0.27, ext618: p1 + r*0.618, ext2618: p1 + r*1.618 }
+      : { retr: p1 + r*0.618, ext127: p1 - r*0.27, ext618: p1 - r*0.618, ext2618: p1 - r*1.618 };
+    let touched=false, moved127=false;
+    for (let i=q+1; i<data.length; i++) {
+      if (isUp) {
+        if (data[i].low<=lvl.retr) touched=true;
+        if (data[i].high>=lvl.ext127) moved127=true;
+      } else {
+        if (data[i].high>=lvl.retr) touched=true;
+        if (data[i].low<=lvl.ext127) moved127=true;
+      }
+    }
+    return touched? lvl.ext618 : (!touched&&!moved127? lvl.ext127 : lvl.ext2618);
+  };
+  let target = computeTarget(preIdx, postIdx), lastClose = data[data.length-1].close;
+  while ((isUp&&lastClose>=target) || (!isUp&&lastClose<=target)) {
+    preIdx = postIdx;
+    postIdx = findPost(preIdx);
+    if (postIdx<0) break;
+    target = computeTarget(preIdx, postIdx);
   }
-
-  if(e._fibLineId) series.removePriceLine(e._fibLineId);
-  const line=series.createPriceLine({price:target,color:'darkgreen',lineWidth:2,axisLabelVisible:true,title:`Fibonacci Target: ${target.toFixed(4)}`});
-  e._fibLineId=line.id;
-  if(!e._zoom) e._zoom=chart.addLineSeries({color:'transparent',lineWidth:0});
-  e._zoom.setData([{time:data[0].time,value:target},{time:data[data.length-1].time,value:target}]);
-  e.fibTarget=target;
+  if (e._fibLineId) series.removePriceLine(e._fibLineId);
+  const line = series.createPriceLine({ price: target, color: 'darkgreen', lineWidth:2, axisLabelVisible:true, title:`Fibonacci Target: ${target.toFixed(4)}` });
+  e._fibLineId = line.id;
+  if (!e._zoom) e._zoom = chart.addLineSeries({ color:'transparent', lineWidth:0 });
+  e._zoom.setData([{ time:data[0].time, value:target },{ time:data[data.length-1].time, value:target }]);
+  e.fibTarget = target;
 }
 
 // ――― 8) drawEMAandProbability ―――
-function drawEMAandProbability(cid){
-  const e=charts[cid]; if(!e?.data?.length||!e.emaArr) return false;
-  const lastC=e.data[e.data.length-1].close, lastE=e.emaArr[e.emaArr.length-1], bull=lastC>lastE;
-  const id=`${cid}-prob`;
-  let div=document.getElementById(id);
-  if(!div){
-    div=document.createElement('div'); div.id=id;
-    Object.assign(div.style,{position:'absolute',top:'8px',left:'8px',zIndex:20,fontSize:'16px',fontWeight:'bold',whiteSpace:'pre',pointerEvents:'none'});
+function drawEMAandProbability(cid) {
+  const e = charts[cid];
+  if (!e?.data?.length || !e.emaArr) return false;
+  const lastC = e.data[e.data.length-1].close;
+  const lastE = e.emaArr[e.emaArr.length-1];
+  const bull = lastC > lastE;
+  const id = `${cid}-prob`;
+  let div = document.getElementById(id);
+  if (!div) {
+    div = document.createElement('div'); div.id = id;
+    Object.assign(div.style, { position:'absolute', top:'8px', left:'8px', zIndex:20, fontSize:'16px', fontWeight:'bold', whiteSpace:'pre', pointerEvents:'none' });
     document.getElementById(cid).appendChild(div);
   }
-  div.style.color=bull?'green':'red';
-  div.textContent=`${bull?'▲':'▼'}\nProbability - ${bull?'Bullish':'Bearish'}`;
+  div.style.color = bull ? 'green' : 'red';
+  div.textContent = `${bull?'▲':'▼'}\nProbability - ${bull?'Bullish':'Bearish'}`;
   return bull;
 }
 
 // ――― 9) drawRSIandSignal ―――
-function drawRSIandSignal(cid,dailyBullish){
-  const e=charts[cid]; if(!e?.data?.length) return null;
-  const arr=rsi(e.data.map(d=>d.close),13), val=arr[arr.length-1], valid=arr.filter(v=>v!=null), maVal=sma(valid,14).slice(-1)[0];
-  let text,color,signal=null;
-  if(dailyBullish){
-    if(val<50&&val>maVal){text='Buy Signal confirmed';color='green';signal=true;}
-    else{text='Wait for Buy Signal';color='gray';}
+function drawRSIandSignal(cid, dailyBullish) {
+  const e = charts[cid];
+  if (!e?.data?.length) return null;
+  const arr = rsi(e.data.map(d=>d.close),13);
+  const val = arr[arr.length-1];
+  const valid = arr.filter(v=>v!=null);
+  const maVal = sma(valid,14).slice(-1)[0];
+  let text, color, signal = null;
+  if (dailyBullish) {
+    if (val<50 && val>maVal) { text='Buy Signal confirmed'; color='green'; signal=true; }
+    else { text='Wait for Buy Signal'; color='gray'; }
   } else {
-    if(val>50&&val<maVal){text='Sell Signal confirmed';color='red';signal=false;}
-    else{text='Wait for Sell Signal';color='gray';}
+    if (val>50 && val<maVal) { text='Sell Signal confirmed'; color='red'; signal=false; }
+    else { text='Wait for Sell Signal'; color='gray'; }
   }
-  const id=`${cid}-rsi`;
-  let div=document.getElementById(id);
-  if(!div){
-    div=document.createElement('div'); div.id=id;
-    Object.assign(div.style,{position:'absolute',top:'28px',left:'8px',zIndex:20,fontSize:'16px',fontWeight:'bold',whiteSpace:'pre',pointerEvents:'none'});
+  const id = `${cid}-rsi`;
+  let div = document.getElementById(id);
+  if (!div) {
+    div = document.createElement('div'); div.id = id;
+    Object.assign(div.style, { position:'absolute', top:'28px', left:'8px', zIndex:20, fontSize:'16px', fontWeight:'bold', whiteSpace:'pre', pointerEvents:'none' });
     document.getElementById(cid).appendChild(div);
   }
-  div.style.color=color;
-  div.textContent=`RSI: ${val.toFixed(2)}\n${text}`;
+  div.style.color = color;
+  div.textContent = `RSI: ${val.toFixed(2)}\n${text}`;
   return signal;
 }
 
 // ――― 10) generateAISummary ―――
-async function generateAISummary(){
+async function generateAISummary() {
   const sym = symbolInput.value;
   outPre.textContent = `Loading AI summary for ${sym}…`;
-
-  // draw and capture indicators
   const bull = drawEMAandProbability('dailyChart');
   const sig  = drawRSIandSignal('hourlyChart', bull);
   const tgt  = charts.hourlyChart?.fibTarget ?? '—';
-
-  // compute average monthly return
+  // average monthly return
   let avgRet = 'N/A';
   try {
     const resp = await axios.get('https://api.twelvedata.com/time_series', {
       params: { symbol: sym, interval: '1month', outputsize: 60, apikey: API_KEY }
     });
-    let vals = (resp.data.values || []).slice().reverse();
-    if (vals.length > 1) {
+    let vals = (resp.data.values||[]).slice().reverse();
+    if (vals.length>1) {
       const rets = [];
-      for (let i = 1; i < vals.length; i++) {
-        const prev = parseFloat(vals[i - 1].close);
-        const cur  = parseFloat(vals[i].close);
-        rets.push((cur / prev - 1) * 100);
+      for (let i=1; i<vals.length; i++) {
+        const prev = parseFloat(vals[i-1].close), cur = parseFloat(vals[i].close);
+        rets.push((cur/prev -1)*100);
       }
-      avgRet = `${(rets.reduce((a, b) => a + b, 0) / rets.length).toFixed(2)}%`;
+      avgRet = `${(rets.reduce((a,b)=>a+b,0)/rets.length).toFixed(2)}%`;
     }
   } catch {}
-
-  // build prompt
   const prompt = `
 Symbol: ${sym}
-Probability (45‑EMA): ${bull ? 'Bullish' : 'Bearish'}
-H1 Signal: ${sig ? 'Buy Signal confirmed' : 'Wait for signal'}
+Probability (45‑EMA): ${bull?'Bullish':'Bearish'}
+H1 Signal: ${sig?'Buy Signal confirmed':'Wait for signal'}
 Fibonacci Target: ${tgt}
 Average monthly return (last 5 years): ${avgRet}
 
@@ -376,105 +397,66 @@ Write a concise analysis covering:
 2. Major upcoming announcements or events that could impact it.
 3. How the probability, H1 signal, and target fit into this context.
   `;
-
-  // call AI
   try {
     const ai = await axios.post('/api/ai', { prompt });
     outPre.textContent = ai.data.summary || ai.data.text || JSON.stringify(ai.data, null, 2);
-  } catch (e) {
+  } catch(e) {
     outPre.textContent = `❌ AI error: ${e.message}`;
   }
 }
 
-// ――― 11.0) Scanner cache (1 hour) ―――
+// ――― 11) Scanner cache & render helper ―――
 let lastScan = { ts: 0, data: [] };
 function renderScannerRows(rows) {
   scannerTbody.innerHTML = '';
-  for (const r of rows) {
-    scannerTbody.append(r);
-  }
+  rows.forEach(r=>scannerTbody.append(r));
 }
 
 // ――― 11) runScanner ―――
-async function runScanner(){
-  const now = Date.now();
-  // reuse cached rows if within the last hour
-  if (now - lastScan.ts < 60 * 60 * 1000) {
+async function runScanner() {
+  const now = Date.now(), TTL = 60*60*1000;
+  if (now - lastScan.ts < TTL) {
     renderScannerRows(lastScan.data);
     return;
   }
-
   const filter = scannerFilter.value.trim().toUpperCase();
-  let list = filter
-    ? symbols.filter(s => s.includes(filter))
-    : symbols.slice();
-
-  // dedupe
+  let list = filter ? scanSymbols.filter(s=>s.includes(filter)) : scanSymbols.slice();
   const seen = new Set();
-  list = list.filter(s => !seen.has(s) && seen.add(s));
-
-  const carry = getPositiveCarryFX();
-  const rows  = [];
-  let count    = 0;
-
+  list = list.filter(s=>!seen.has(s)&&seen.add(s));
+  const rows=[], {length}=list;
+  let count=0;
   for (const sym of list) {
-    if (!filter && count >= 20) break;
-
-    // daily timeframe
-    await fetchAndRender(sym, '1d', 'scannerTempDaily');
+    if (!filter && count>=20) break;
+    await fetchAndRender(sym,'1d','scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
-
-    // hourly timeframe
-    await fetchAndRender(sym, '1h', 'scannerTempHourly');
+    await fetchAndRender(sym,'1h','scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
-    const sg  = drawRSIandSignal('scannerTempHourly', pb);
-
-    // skip if no filter, bearish and no signal
-    if (!filter && pb === false && sg === null) continue;
-
-    // determine status
+    const sg  = drawRSIandSignal('scannerTempHourly',pb);
+    if (!filter && pb===false && sg===null) continue;
     let statusText, statusColor;
-    if (sg === true)       { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
-    else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
-    else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
-
-    // projected return
-    let proj = '—';
+    if (sg===true)       { statusText='Buy Signal confirmed';  statusColor='green'; }
+    else if (sg===false) { statusText='Sell Signal confirmed'; statusColor='red';   }
+    else                 { statusText=pb?'Wait for Buy Signal':'Wait for Sell Signal'; statusColor='gray'; }
+    let proj='—';
     if (cryptoSymbols.includes(sym)) {
       const cagr = await getProjectedAnnualReturn(sym);
-      proj = (typeof cagr === 'number') ? `${(cagr * 100).toFixed(2)}%` : 'N/A';
+      proj = typeof cagr==='number' ? `${(cagr*100).toFixed(2)}%` : 'N/A';
     } else if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) {
-      const bars = charts.scannerTempDaily.data;
-      if (bars?.length > 1) {
-        const first = bars[0].close;
-        const last  = bars[bars.length - 1].close;
-        const yrs   = (bars[bars.length - 1].time - bars[0].time) / (365 * 24 * 60 * 60);
-        const cagr  = Math.pow(last / first, 1 / yrs) - 1;
-        proj = `${(cagr * 100).toFixed(2)}%`;
-      } else {
-        proj = 'N/A';
-      }
+      const cagr = await getProjectedAnnualReturn(sym);
+      proj = typeof cagr==='number' ? `${(cagr*100).toFixed(2)}%` : 'N/A';
     }
-
-    // build row
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${sym}</td>
-      <td style="color:${pb ? 'green' : 'red'}">
-        ${pb ? 'Bullish' : 'Bearish'}
-      </td>
-      <td style="color:${statusColor}">
-        ${statusText}
-      </td>
-      <td>${typeof h1T === 'number' ? h1T.toFixed(4) : h1T}</td>
+      <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
+      <td style="color:${statusColor}">${statusText}</td>
+      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
       <td style="text-align:right;">${proj}</td>
     `;
     rows.push(tr);
     count++;
   }
-
-  // cache & render
   lastScan = { ts: now, data: rows };
   renderScannerRows(rows);
 }
@@ -483,19 +465,14 @@ async function runScanner(){
 async function updateDashboard(){
   const sym = symbolInput.value;
   if (!symbols.includes(sym)) return;
-
   dailyTitle.textContent  = `${sym} — Daily`;
-  hourlyTitle.textContent = `${sym} — 1 Hour`;
-
-  await fetchAndRender(sym, '1d', 'dailyChart');
-  await fetchAndRender(sym, '1h', 'hourlyChart');
-
+  hourlyTitle.textContent = `${sym} — 1 Hour`;
+  await fetchAndRender(sym,'1d','dailyChart');
+  await fetchAndRender(sym,'1h','hourlyChart');
   drawFibsOnChart('dailyChart');
   drawFibsOnChart('hourlyChart');
-
   const bull = drawEMAandProbability('dailyChart');
-  drawRSIandSignal('hourlyChart', bull);
-
+  drawRSIandSignal('hourlyChart',bull);
   await generateAISummary();
   await runScanner();
 }
@@ -503,32 +480,21 @@ async function updateDashboard(){
 // ――― 13) init ―――
 (async function init(){
   await loadInterestRates();
-
-  // create hidden divs for off‑screen rendering
-  ['scannerTempDaily','scannerTempHourly'].forEach(id => {
+  ['scannerTempDaily','scannerTempHourly'].forEach(id=>{
     if (!document.getElementById(id)) {
       const d = document.createElement('div');
-      d.id = id;
-      d.style.display = 'none';
+      d.id=id; d.style.display='none';
       document.body.appendChild(d);
     }
   });
-
-  // populate the datalist
-  symbols.forEach(s => {
+  symbols.forEach(s=>{
     const o = document.createElement('option');
-    o.value = s;
+    o.value=s;
     datalistEl.appendChild(o);
   });
-
-  // set initial symbol and hook events
   symbolInput.value = cryptoSymbols[0];
-  symbolInput.addEventListener('input', () => {
-    if (symbols.includes(symbolInput.value)) updateDashboard();
-  });
+  symbolInput.addEventListener('input',()=>{ if (symbols.includes(symbolInput.value)) updateDashboard(); });
   aiBtn.addEventListener('click', generateAISummary);
   scannerFilter.addEventListener('input', runScanner);
-
-  // first render
   updateDashboard();
 })();
