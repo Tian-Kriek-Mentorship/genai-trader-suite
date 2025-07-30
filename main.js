@@ -335,6 +335,7 @@ function drawRSIandSignal(cid,dailyBullish){
   return signal;
 }
 
+
 // ――― 10) generateAISummary ―――
 async function generateAISummary(){
   const sym = symbolInput.value;
@@ -386,63 +387,77 @@ Write a concise analysis covering:
   }
 }
 
-// ――― 11.0) Scanner cache (1 hour) ―――
-let lastScan = { ts: 0, data: [] };
-function renderScannerRows(rows) {
-  scannerTbody.innerHTML = '';
-  for (const r of rows) {
-    scannerTbody.append(r);
-  }
-}
-
+// ――― 11) Scanner setup ―――
 import { runScanner } from './scanner.js';
 
+// Create and render scanner rows based on runScanner output
+async function handleRunScanner() {
+  const filter = scannerFilter.value.trim().toLowerCase();
+  const scanResults = await runScanner(symbols);
+  const rows = scanResults
+    .filter(r => r.symbol.toLowerCase().includes(filter))
+    .map(r => {
+      const tr = document.createElement('tr');
+      // Symbol cell
+      const tdSym = document.createElement('td');
+      tdSym.textContent = r.symbol;
+      tr.appendChild(tdSym);
+      // Return cell
+      const tdRet = document.createElement('td');
+      if (r.data.length > 1) {
+        const first = parseFloat(r.data[0].close);
+        const last = parseFloat(r.data[r.data.length - 1].close);
+        tdRet.textContent = ((last/first - 1) * 100).toFixed(2) + '%';
+      } else {
+        tdRet.textContent = 'N/A';
+      }
+      tr.appendChild(tdRet);
+      return tr;
+    });
+  renderScannerRows(rows);
+}
+
+// Attach scanner event
+scannerFilter.addEventListener('input', handleRunScanner);
+
 // ――― 12) updateDashboard ―――
-async function updateDashboard(){
+async function updateDashboard() {
   const sym = symbolInput.value;
   if (!symbols.includes(sym)) return;
-
   dailyTitle.textContent  = `${sym} — Daily`;
   hourlyTitle.textContent = `${sym} — 1 Hour`;
-
   await fetchAndRender(sym, '1d', 'dailyChart');
   await fetchAndRender(sym, '1h', 'hourlyChart');
-
   drawFibsOnChart('dailyChart');
   drawFibsOnChart('hourlyChart');
-
   const bull = drawEMAandProbability('dailyChart');
   drawRSIandSignal('hourlyChart', bull);
-
   await generateAISummary();
-  await runScanner();           // <— now lives in scanner.js
+  // scanner is now handled separately via handleRunScanner
 }
 
 // ――― 13) init ―――
-(async function init(){
+(async function init() {
   await loadInterestRates();
-
-  // hidden divs…
-  ['scannerTempDaily','scannerTempHourly'].forEach(id=>{
-    if (!document.getElementById(id)){
+  // inject hidden divs if needed
+  ['scannerTempDaily','scannerTempHourly'].forEach(id => {
+    if (!document.getElementById(id)) {
       const d = document.createElement('div');
-      d.id = id; d.style.display='none';
+      d.id = id; d.style.display = 'none';
       document.body.appendChild(d);
     }
   });
-
-  // datalist…
-  symbols.forEach(s=>{
+  // populate datalist
+  symbols.forEach(s => {
     const o = document.createElement('option');
     o.value = s;
     datalistEl.appendChild(o);
   });
-
-  // event handlers…
-  symbolInput.addEventListener('input',()=>{ if(symbols.includes(symbolInput.value)) updateDashboard(); });
+  // event handlers
+  symbolInput.addEventListener('input', () => { if (symbols.includes(symbolInput.value)) updateDashboard(); });
   aiBtn.addEventListener('click', generateAISummary);
-  scannerFilter.addEventListener('input', runScanner);
-
-  // first draw
+  // initial dashboard
   updateDashboard();
+  // initial scanner run
+  handleRunScanner();
 })();
