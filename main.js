@@ -467,7 +467,6 @@ async function runScanner() {
   // 1) try to restore from localStorage if we have a fresh, unfiltered cache
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
   if (!query && saved.ts && (now - saved.ts) < TTL) {
-    // rebuild <tr> elements from saved HTML
     lastScan = {
       ts: saved.ts,
       data: saved.data.map(html => {
@@ -498,11 +497,11 @@ async function runScanner() {
     // when no query, limit to first 20
     if (!query && count >= 20) break;
 
-    // daily off-screen
+    // daily off‑screen
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
 
-    // hourly off-screen
+    // hourly off‑screen
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
@@ -517,10 +516,19 @@ async function runScanner() {
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
-    // projected return (uses your monthly‑TTL cache under the hood)
-    let proj = '—';
+    // projected annual return
     const cagr = await getProjectedAnnualReturn(sym);
-    if (typeof cagr === 'number') proj = `${(cagr * 100).toFixed(2)}%`;
+    const annualStr = (typeof cagr === 'number')
+      ? `${(cagr * 100).toFixed(2)}%`
+      : '—';
+
+    // monthly return rate
+    const monthlyRet = (typeof cagr === 'number')
+      ? Math.pow(1 + cagr, 1/12) - 1
+      : null;
+    const monthlyStr = monthlyRet != null
+      ? `${(monthlyRet * 100).toFixed(2)}%`
+      : '—';
 
     // build the row
     const tr = document.createElement('tr');
@@ -529,8 +537,43 @@ async function runScanner() {
       <td style="color:${pb ? 'green' : 'red'}">${pb ? 'Bullish' : 'Bearish'}</td>
       <td style="color:${statusColor}">${statusText}</td>
       <td>${typeof h1T === 'number' ? h1T.toFixed(4) : h1T}</td>
-      <td style="text-align:right;">${proj}</td>
+      <td style="text-align:right;">${annualStr}</td>
+
+      <!-- Monthly Return -->
+      <td style="text-align:right;">${monthlyStr}</td>
+
+      <!-- Amount Invested -->
+      <td style="text-align:right;">
+        <input type="number"
+               class="amount-invested"
+               placeholder="0"
+               style="width:6em"
+        />
+      </td>
+
+      <!-- Portfolio Weight -->
+      <td class="portfolio-weight">—</td>
+
+      <!-- Next 12 months profits -->
+      ${Array(12).fill('<td class="future-profit">—</td>').join('')}
     `;
+    
+    // wire up amount-invested → future profits
+    const input = tr.querySelector('.amount-invested');
+    const profitCells = tr.querySelectorAll('.future-profit');
+    input.addEventListener('input', () => {
+      const amt = parseFloat(input.value) || 0;
+      if (monthlyRet != null) {
+        profitCells.forEach((td, idx) => {
+          // profit after (idx+1) months
+          const profit = amt * (Math.pow(1 + monthlyRet, idx + 1) - 1);
+          td.textContent = profit.toFixed(2);
+        });
+      } else {
+        profitCells.forEach(td => td.textContent = '—');
+      }
+    });
+
     rows.push(tr);
     count++;
   }
@@ -545,6 +588,7 @@ async function runScanner() {
   // 4) render
   renderScannerRows(rows);
 }
+
 
 // ――― 12) updateDashboard ―――
 async function updateDashboard(){
