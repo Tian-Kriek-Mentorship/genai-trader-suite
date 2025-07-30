@@ -100,7 +100,7 @@ function buildScannerHeader() {
   theadTr.appendChild(th5yr);
 }
 
-}
+
 
 
 // ――― 3) Math Helpers ―――
