@@ -596,7 +596,7 @@ function wireUpInvestInputs() {
     });
   });
 
-
+}
 
 
 // ――― 12) updateDashboard ―――
