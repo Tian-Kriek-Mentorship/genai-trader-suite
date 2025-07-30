@@ -282,12 +282,15 @@ async function fetchAndRender(symbol, interval, containerId) {
   const c = document.getElementById(containerId);
   c.innerHTML = '';
   const chart = LightweightCharts.createChart(c, {
-    layout:           { textColor: '#000' ,
-    fontSize: 16,          
-    fontFamily: 'Arial'   },
-    rightPriceScale:  { scaleMargins: { top: 0.3, bottom: 0.1 } },
-    timeScale:        { timeVisible: true, secondsVisible: false }
-  });
+  layout: {
+    textColor:  '#000',
+    fontSize:   16,
+    fontFamily: 'Arial',
+  },
+  rightPriceScale: { scaleMargins: { top: 0.3, bottom: 0.1 } },
+  timeScale:       { timeVisible: true, secondsVisible: false },
+});
+
   const series = chart.addCandlestickSeries();
   series.setData(data);
   charts[containerId] = { chart, series, data };
@@ -610,7 +613,7 @@ async function updateDashboard(){
 }
 
 // ――― 13) init ―――
-((async function init(){
+(async function init(){
   await loadInterestRates();
 
   // build your hidden off‑screen divs…
