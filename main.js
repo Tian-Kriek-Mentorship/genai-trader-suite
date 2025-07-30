@@ -545,8 +545,8 @@ async function updateDashboard(){
   hourlyTitle.textContent = `${sym} — 1 Hour`;
   await fetchAndRender(sym,'1d','dailyChart');
   await fetchAndRender(sym,'1h','hourlyChart');
-  drawFibsOnChart('dailyChart');
-  drawFibsOnChart('hourlyChart');
+  
+  
   const bull = drawEMAandProbability('dailyChart');
   drawRSIandSignal('hourlyChart',bull);
   await generateAISummary();
