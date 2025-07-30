@@ -426,15 +426,20 @@ async function generateAISummary() {
 Symbol: ${sym}
 Probability (45‑EMA): ${bull ? 'Bullish' : 'Bearish'}
 H1 Signal: ${sig ? 'Buy Signal confirmed' : 'Wait for signal'}
-Daily Fibonacci Target: ${dailyTgt}
-Hourly Fibonacci Target: ${hourlyTgt}
+Fibonacci Target (Daily): ${charts.dailyChart.fibTarget ?? '—'}
+Fibonacci Target (1h): ${charts.hourlyChart.fibTarget ?? '—'}
 Projected Annual Return: ${proj}
 
 Write a concise analysis covering:
 1. The current state of ${sym} and overall market sentiment.
-2. Major upcoming announcements or events that could impact it.
-3. How the probability, signals, and targets fit into this context.
-  `;
+2. Probability (as above).
+3. Current signal.
+4. Longer‑term (daily) Fibo target.
+5. Short‑term (hourly) Fibo target.
+6. Major upcoming announcements or events that could impact it.  
+7. Projected annual return.
+8. Explain the symbol’s history, purpose & use‑cases.
+`;
 
   // 5) call AI
   try {
