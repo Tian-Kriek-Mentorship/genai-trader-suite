@@ -464,7 +464,7 @@ async function runScanner() {
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // 1) try to restore from localStorage if we have a fresh, unfiltered cache
+  // restore cache if no query and still fresh
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
   if (!query && saved.ts && (now - saved.ts) < TTL) {
     lastScan = {
@@ -479,38 +479,30 @@ async function runScanner() {
     return;
   }
 
-  // 2) otherwise, build a fresh scan
+  // otherwise build fresh list
   let list = query
     ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
-
-  // dedupe
   const seen = new Set();
   list = list.filter(s => !seen.has(s) && seen.add(s));
-
-  console.log('🔍 query:', query, '→ candidates:', list);
 
   const rows = [];
   let count = 0;
 
   for (const sym of list) {
-    // when no query, limit to first 20
     if (!query && count >= 20) break;
 
-    // daily off‑screen
+    // get rate data off-screen
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
-
-    // hourly off‑screen
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
 
-    // skip if no query and nothing interesting
     if (!query && pb === false && sg === null) continue;
 
-    // status
+    // status text/color
     let statusText, statusColor;
     if (sg === true)       { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
@@ -518,76 +510,59 @@ async function runScanner() {
 
     // projected annual return
     const cagr = await getProjectedAnnualReturn(sym);
-    const annualStr = (typeof cagr === 'number')
+    const projAnnual = typeof cagr === 'number'
       ? `${(cagr * 100).toFixed(2)}%`
       : '—';
 
-    // monthly return rate
-    const monthlyRet = (typeof cagr === 'number')
-      ? Math.pow(1 + cagr, 1/12) - 1
-      : null;
-    const monthlyStr = monthlyRet != null
-      ? `${(monthlyRet * 100).toFixed(2)}%`
-      : '—';
+    // monthly return
+    let monthlyRet = '—';
+    let mRate = 0;
+    if (typeof cagr === 'number') {
+      mRate = Math.pow(1 + cagr, 1/12) - 1;
+      monthlyRet = `${(mRate * 100).toFixed(2)}%`;
+    }
 
-    // build the row
+    // build row with new columns
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${sym}</td>
       <td style="color:${pb ? 'green' : 'red'}">${pb ? 'Bullish' : 'Bearish'}</td>
       <td style="color:${statusColor}">${statusText}</td>
       <td>${typeof h1T === 'number' ? h1T.toFixed(4) : h1T}</td>
-      <td style="text-align:right;">${annualStr}</td>
-
-      <!-- Monthly Return -->
-      <td style="text-align:right;">${monthlyStr}</td>
-
-      <!-- Amount Invested -->
-      <td style="text-align:right;">
-        <input type="number"
-               class="amount-invested"
-               placeholder="0"
-               style="width:6em"
-        />
-      </td>
-
-      <!-- Portfolio Weight -->
-      <td class="portfolio-weight">—</td>
-
-      <!-- Next 12 months profits -->
-      ${Array(12).fill('<td class="future-profit">—</td>').join('')}
+      <td style="text-align:right;">${projAnnual}</td>
+      <td style="text-align:right;">${monthlyRet}</td>
+      <td><input type="number" class="amount-invested" placeholder="0" style="width:6ch" /></td>
+      <td style="text-align:right;">0.00%</td> <!-- Portfolio Weight placeholder -->
+      ${[...Array(12).keys()].map(i =>
+        `<td class="month-${i+1}">—</td>`
+      ).join('')}
     `;
-    
-    // wire up amount-invested → future profits
-    const input = tr.querySelector('.amount-invested');
-    const profitCells = tr.querySelectorAll('.future-profit');
-    input.addEventListener('input', () => {
-      const amt = parseFloat(input.value) || 0;
-      if (monthlyRet != null) {
-        profitCells.forEach((td, idx) => {
-          // profit after (idx+1) months
-          const profit = amt * (Math.pow(1 + monthlyRet, idx + 1) - 1);
-          td.textContent = profit.toFixed(2);
-        });
-      } else {
-        profitCells.forEach(td => td.textContent = '—');
-      }
+
+    // wire up the "Amount Invested" input to fill month‑1 profit
+    const amtInput = tr.querySelector('.amount-invested');
+    const monthCells = Array.from(tr.querySelectorAll('[class^=month-]'));
+    amtInput.addEventListener('input', () => {
+      const v = parseFloat(amtInput.value) || 0;
+      monthCells.forEach((cell, idx) => {
+        // profit for month N: principal * ((1+mRate)^N - 1)
+        const profit = v * (Math.pow(1 + mRate, idx + 1) - 1);
+        cell.textContent = profit ? profit.toFixed(2) : '—';
+      });
     });
 
     rows.push(tr);
     count++;
   }
 
-  // 3) cache in‐memory and persist to localStorage
+  // cache & render
   lastScan = { ts: now, data: rows };
   localStorage.setItem('scanner_cache', JSON.stringify({
     ts: now,
     data: rows.map(tr => tr.innerHTML)
   }));
-
-  // 4) render
   renderScannerRows(rows);
 }
+
 
 
 // ――― 12) updateDashboard ―――
