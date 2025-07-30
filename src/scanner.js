@@ -1,4 +1,11 @@
 // scanner.js
+// src/scanner.js
+const cryptoSymbols = [
+  'BTCUSDT','ETHUSDT','BNBUSDT','XRPUSDT',
+  'ADAUSDT','SOLUSDT','DOGEUSDT','DOTUSDT',
+  'MATICUSDT','AVAXUSDT'
+];
+
 import axios from 'axios';
 import Bottleneck from 'bottleneck';
 import axiosRetry from 'axios-retry';
