@@ -593,6 +593,7 @@ async function runScanner() {
   });
 
 
+
 // ――― 12) updateDashboard ―――
 async function updateDashboard(){
   const sym = symbolInput.value;
