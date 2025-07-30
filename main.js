@@ -500,7 +500,7 @@ async function runScanner() {
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // try to reuse cache...
+  // try to reuse cache…
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
   if (!query && saved.ts && now - saved.ts < TTL) {
     const restored = saved.data.map(html => {
@@ -509,12 +509,13 @@ async function runScanner() {
       return tr;
     });
     renderScannerRows(restored);
+    wireUpInvestInputs();
     return;
   }
 
-  // build & dedupe list...
+  // build & dedupe list…
   let list = query
-    ? scanSymbols.filter(s => s.includes(query))
+    ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
   const seen = new Set();
   list = list.filter(s => !seen.has(s) && seen.add(s));
@@ -525,63 +526,87 @@ async function runScanner() {
   for (const sym of list) {
     if (!query && count++ >= 20) break;
 
-    // off‑screen fetch & indicators
+    // off‑screen daily → probability
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
+
+    // off‑screen hourly → fib + signal
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
+
     if (!query && pb === false && sg === null) continue;
 
-    // status cell
+    // status text/color
     let statusText, statusColor;
-    if (sg === true)       { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
+    if      (sg === true)  { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
-    // CAGR‑based values
+    // CAGR‐based values
     const cagr = await getProjectedAnnualReturn(sym);
-    const proj   = typeof cagr === 'number' ? `${(cagr*100).toFixed(2)}%` : '—';
-    const monthly = typeof cagr === 'number'
-      ? `${((Math.pow(1+cagr,1/12)-1)*100).toFixed(2)}%`
-      : '—';
-    const fiveYr = typeof cagr === 'number'
-      ? `${((Math.pow(1+cagr,5)-1)*100).toFixed(2)}%`
-      : '—';
+    const proj = typeof cagr === 'number'
+               ? `${(cagr * 100).toFixed(2)}%`
+               : '—';
 
-    // build the row: 8 static → 12 months → 5yr last
+    // build row: 1–8 fixed → 9–20 months → 21 empty five‑year
     const tr = document.createElement('tr');
-tr.innerHTML = `
-  <!-- 1–8 fixed cols -->
-  <td>${sym}</td>
-  <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
-  <td style="color:${statusColor}">${statusText}</td>
-  <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
-  <td style="text-align:right;">${proj}</td>
-  <td style="text-align:right;">${monthly}</td>
-  <td><input type="number" class="amount-invested"  placeholder="0.00"/></td>
-  <td><input type="number" class="portfolio-weight" placeholder="%"/></td>
+    // stash cagr on the row for later
+    tr.dataset.cagr = cagr || 0;
 
-  <!-- 9–20: 12 rolling months -->
-  ${Array.from({ length: 12 }, (_, i) =>
-    `<td class="month-${i+1}"></td>`
-  ).join('')}
+    tr.innerHTML = `
+      <td>${sym}</td>
+      <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
+      <td style="color:${statusColor}">${statusText}</td>
+      <td>${typeof h1T==='number' ? h1T.toFixed(4) : h1T}</td>
+      <td style="text-align:right;">${proj}</td>
+      <td><input type="number" class="amount-invested" placeholder="0.00" style="width:6em;text-align:right;"/></td>
+      <td><input type="number" class="portfolio-weight" placeholder="%" style="width:4em;text-align:right;"/></td>
 
-  <!-- 21: 5 yr projection at the very end -->
-  <td style="text-align:right;">${fiveYr}</td>
-`;
-rows.push(tr);
+      ${Array.from({ length: 12 }, (_, i) =>
+        `<td class="month-${i+1}" style="text-align:right;"></td>`
+      ).join('')}
+
+      <td class="five-year" style="text-align:right;"></td>
+    `;
+
+    rows.push(tr);
   }
 
-  // cache + render
+  // cache + persist
   localStorage.setItem('scanner_cache', JSON.stringify({
     ts: now,
     data: rows.map(tr => tr.innerHTML)
   }));
+
+  // render + hook inputs
   renderScannerRows(rows);
+  wireUpInvestInputs();
 }
 
+// after you render the rows, call this to hook up each input
+function wireUpInvestInputs() {
+  document.querySelectorAll('#scannerTable tbody tr').forEach(tr => {
+    const investInput = tr.querySelector('.amount-invested');
+    const cagr = parseFloat(tr.dataset.cagr);
+    investInput.addEventListener('input', () => {
+      const amt = parseFloat(investInput.value) || 0;
+
+      // months 1–12
+      for (let i = 1; i <= 12; i++) {
+        const cell = tr.querySelector(`.month-${i}`);
+        const gain = amt * (Math.pow(1 + cagr, i / 12) - 1);
+        cell.textContent = gain ? gain.toFixed(2) : '';
+      }
+
+      // 5 yr projection cell
+      const fiveCell = tr.querySelector('.five-year');
+      const gain5 = amt * (Math.pow(1 + cagr, 5) - 1);
+      fiveCell.textContent = gain5 ? gain5.toFixed(2) : '';
+    });
+  });
+}
 
 
 
