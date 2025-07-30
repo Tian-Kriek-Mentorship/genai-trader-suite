@@ -541,17 +541,21 @@ async function runScanner() {
 async function updateDashboard(){
   const sym = symbolInput.value;
   if (!symbols.includes(sym)) return;
+
   dailyTitle.textContent  = `${sym} — Daily`;
   hourlyTitle.textContent = `${sym} — 1 Hour`;
-  await fetchAndRender(sym,'1d','dailyChart');
-  await fetchAndRender(sym,'1h','hourlyChart');
-  
-  
+
+  // draw charts + indicators (fetchAndRender already draws Fibs)
+  await fetchAndRender(sym, '1d', 'dailyChart');
+  await fetchAndRender(sym, '1h', 'hourlyChart');
   const bull = drawEMAandProbability('dailyChart');
-  drawRSIandSignal('hourlyChart',bull);
+  drawRSIandSignal('hourlyChart', bull);
+
+  // refresh the AI summary
   await generateAISummary();
-  //await runScanner();
-// don’t auto-run scanner on load; wait for filter input
+
+  // *** re‑run the scanner so your table gets updated for the new symbol ***
+  await runScanner();
 }
 
 // ――― 13) init ―――
