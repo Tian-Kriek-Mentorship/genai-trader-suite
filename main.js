@@ -69,6 +69,34 @@ const outPre        = document.getElementById('out');
 const scannerFilter = document.getElementById('scannerFilter');
 const scannerTbody  = document.querySelector('#scannerTable tbody');
 
+// ――― 2.5) Build dynamic month headers ―――
+function buildScannerHeader() {
+  // grab the single <tr> in the <thead>
+  const theadTr = document.querySelector('#scannerTable thead tr');
+
+  // remove any old month‑columns beyond the 9 fixed ones
+  while (theadTr.children.length > 9) {
+    theadTr.removeChild(theadTr.lastChild);
+  }
+
+  // append the next 12 rolling month headers
+  const today = new Date();
+  for (let i = 1; i <= 12; i++) {
+    const d = new Date(today);
+    d.setMonth(d.getMonth() + i);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const label = `${mm}/${dd}/${yyyy}`;
+
+    const th = document.createElement('th');
+    th.textContent = label;
+    th.classList.add(`month-${i}`);
+    theadTr.appendChild(th);
+  }
+}
+
+
 // ――― 3) Math Helpers ―――
 function ema(arr, p) {
   const k = 2 / (p + 1), out = [], n = arr.length;
@@ -582,23 +610,36 @@ async function updateDashboard(){
 }
 
 // ――― 13) init ―――
-(async function init(){
+((async function init(){
   await loadInterestRates();
-  ['scannerTempDaily','scannerTempHourly'].forEach(id=>{
+
+  // build your hidden off‑screen divs…
+  ['scannerTempDaily','scannerTempHourly'].forEach(id => {
     if (!document.getElementById(id)) {
       const d = document.createElement('div');
-      d.id=id; d.style.display='none';
+      d.id = id; d.style.display = 'none';
       document.body.appendChild(d);
     }
   });
-  symbols.forEach(s=>{
+
+  // populate your symbol datalist…
+  symbols.forEach(s => {
     const o = document.createElement('option');
-    o.value=s;
+    o.value = s;
     datalistEl.appendChild(o);
   });
+
+  // **here** build the scanner header (9 fixed + 12 dynamic)
+  buildScannerHeader();
+
+  // initial symbol, hooks, first render…
   symbolInput.value = cryptoSymbols[0];
-  symbolInput.addEventListener('input',()=>{ if (symbols.includes(symbolInput.value)) updateDashboard(); });
+  symbolInput.addEventListener('input', () => {
+    if (symbols.includes(symbolInput.value)) updateDashboard();
+  });
   aiBtn.addEventListener('click', generateAISummary);
   scannerFilter.addEventListener('input', runScanner);
+
   updateDashboard();
 })();
+
