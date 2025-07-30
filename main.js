@@ -74,8 +74,8 @@ function buildScannerHeader() {
   // grab the single <tr> in the <thead>
   const theadTr = document.querySelector('#scannerTable thead tr');
 
-  // remove any old month‑columns beyond the 9 fixed ones
-  while (theadTr.children.length > 9) {
+  // remove any old month‑columns beyond the 8 fixed ones
+  while (theadTr.children.length > 8) {
     theadTr.removeChild(theadTr.lastChild);
   }
 
@@ -88,12 +88,18 @@ function buildScannerHeader() {
     const dd = String(d.getDate()).padStart(2, '0');
     const yyyy = d.getFullYear();
     const label = `${mm}/${dd}/${yyyy}`;
-
     const th = document.createElement('th');
     th.textContent = label;
     th.classList.add(`month-${i}`);
     theadTr.appendChild(th);
   }
+
+  // finally append the one “5 yr Projection” header at the end
+  const th5yr = document.createElement('th');
+  th5yr.textContent = '5 yr Projection';
+  theadTr.appendChild(th5yr);
+}
+
 }
 
 
@@ -546,26 +552,26 @@ async function runScanner() {
 
     // build the row: 8 static → 12 months → 5yr last
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <!-- 1–8: fixed -->
-      <td>${sym}</td>
-      <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
-      <td style="color:${statusColor}">${statusText}</td>
-      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
-      <td style="text-align:right;">${proj}</td>
-      <td style="text-align:right;">${monthly}</td>
-      <td><input type="number" class="amount-invested"  placeholder="0.00"/></td>
-      <td><input type="number" class="portfolio-weight" placeholder="%"/></td>
+tr.innerHTML = `
+  <!-- 1–8 fixed cols -->
+  <td>${sym}</td>
+  <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
+  <td style="color:${statusColor}">${statusText}</td>
+  <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
+  <td style="text-align:right;">${proj}</td>
+  <td style="text-align:right;">${monthly}</td>
+  <td><input type="number" class="amount-invested"  placeholder="0.00"/></td>
+  <td><input type="number" class="portfolio-weight" placeholder="%"/></td>
 
-      <!-- 9–20: rolling months -->
-      ${Array.from({ length: 12 }, (_, i) =>
-        `<td class="month-${i+1}"></td>`
-      ).join('')}
+  <!-- 9–20: 12 rolling months -->
+  ${Array.from({ length: 12 }, (_, i) =>
+    `<td class="month-${i+1}"></td>`
+  ).join('')}
 
-      <!-- 21: 5yr projection -->
-      <td style="text-align:right;">${fiveYr}</td>
-    `;
-    rows.push(tr);
+  <!-- 21: 5 yr projection at the very end -->
+  <td style="text-align:right;">${fiveYr}</td>
+`;
+rows.push(tr);
   }
 
   // cache + render
