@@ -543,37 +543,36 @@ async function runScanner() {
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
     // projected annual return
-    let proj = '—';
     const cagr = await getProjectedAnnualReturn(sym);
-    if (typeof cagr === 'number') {
-      proj = `${(cagr * 100).toFixed(2)}%`;
-    }
+    const proj = (typeof cagr === 'number')
+      ? `${(cagr * 100).toFixed(2)}%`
+      : '—';
 
     // monthly return = (1 + CAGR)^(1/12) – 1
-    let monthly = '—';
-    if (typeof cagr === 'number') {
-      const m = Math.pow(1 + cagr, 1/12) - 1;
-      monthly = `${(m * 100).toFixed(2)}%`;
-    }
+    const monthly = (typeof cagr === 'number')
+      ? `${((Math.pow(1 + cagr, 1/12) - 1) * 100).toFixed(2)}%`
+      : '—';
 
-    // build row with 8 static + 12 future cells
+    // 5 yr projection = (1 + CAGR)^5 – 1
+    const fiveYr = (typeof cagr === 'number')
+      ? `${((Math.pow(1 + cagr, 5) - 1) * 100).toFixed(2)}%`
+      : '—';
+
+    // build row: 8 fixed columns, then 12 months, then 5yr last
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${sym}</td>
-      <td style="color:${pb?'green':'red'}">
-        ${pb ? 'Bullish' : 'Bearish'}
-      </td>
-      <td style="color:${statusColor}">
-        ${statusText}
-      </td>
-      <td>${typeof h1T === 'number' ? h1T.toFixed(4) : h1T}</td>
+      <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
+      <td style="color:${statusColor}">${statusText}</td>
+      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
       <td style="text-align:right;">${proj}</td>
       <td style="text-align:right;">${monthly}</td>
-      <td><input type="number" class="amount-invested" placeholder="0.00" /></td>
-      <td><input type="number" class="portfolio-weight" placeholder="%" /></td>
+      <td><input type="number" class="amount-invested"  placeholder="0.00" /></td>
+      <td><input type="number" class="portfolio-weight" placeholder="%"   /></td>
       ${Array.from({ length: 12 }, (_, i) =>
         `<td class="month-${i+1}"></td>`
       ).join('')}
+      <td style="text-align:right;">${fiveYr}</td>
     `;
     rows.push(tr);
     count++;
@@ -588,6 +587,7 @@ async function runScanner() {
   // render
   renderScannerRows(rows);
 }
+
 
 
 
