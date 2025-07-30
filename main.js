@@ -591,7 +591,7 @@ async function runScanner() {
       }
     });
   });
-}
+
 
 // ――― 12) updateDashboard ―――
 async function updateDashboard(){
