@@ -426,16 +426,21 @@ async function generateAISummary() {
   } catch {}
   const prompt = `
 Symbol: ${sym}
-Probability (45‑EMA): ${bull?'Bullish':'Bearish'}
-H1 Signal: ${sig?'Buy Signal confirmed':'Wait for signal'}
-Fibonacci Target: ${tgt}
-Average monthly return (last 5 years): ${avgRet}
+Probability (45‑EMA): ${bull ? 'Bullish' : 'Bearish'}
+H1 Signal: ${sig ? 'Buy Signal confirmed' : 'Wait for signal'}
+Fibonacci Target (Daily): ${charts.dailyChart.fibTarget ?? '—'}
+Fibonacci Target (1h): ${charts.hourlyChart.fibTarget ?? '—'}
+Projected Annual Return: ${avgRet}
 
-Write a concise analysis covering:
-1. The current state of ${sym} and overall market sentiment.
-2. Major upcoming announcements or events that could impact it.
-3. How the probability, H1 signal, and target fit into this context.
-  `;
+1. Overall sentiment.
+2. Probability (as above).
+3. Current signal.
+4. Longer‑term (daily) Fibo target.
+5. Short‑term (hourly) Fibo target.
+6. Projected annual return.
+7. Explain the symbol’s history, purpose & use‑cases.
+`;
+
   try {
     const ai = await axios.post('/api/ai', { prompt });
     outPre.textContent = ai.data.summary || ai.data.text || JSON.stringify(ai.data, null, 2);
