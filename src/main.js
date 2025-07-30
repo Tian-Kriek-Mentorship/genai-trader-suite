@@ -1,6 +1,6 @@
 // main.js
 import axios from 'axios';
-import * as LightweightCharts from 'lightweight-charts';
+import { createChart } from 'lightweight-charts';
 import { runScanner } from './scanner.js';
 // ――― 0) Shared localStorage Cache (30 min) ―――
 const CACHE_KEY = 'gtm_cache';
@@ -205,7 +205,7 @@ async function fetchAndRender(symbol, interval, containerId) {
   // render chart
   const c = document.getElementById(containerId);
   c.innerHTML = '';
-  const chart = LightweightCharts.createChart(c, {
+  const chart = createChart(c, {
     layout:           { textColor: '#000' },
     rightPriceScale:  { scaleMargins: { top: 0.3, bottom: 0.1 } },
     timeScale:        { timeVisible: true, secondsVisible: false }
