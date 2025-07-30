@@ -538,79 +538,60 @@ async function runScanner() {
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
     if (!query && pb === false && sg === null) continue;
 
-    const cagr = await getProjectedAnnualReturn(sym);
-    const proj = typeof cagr === 'number'
+    // fetch CAGR and calculate static values
+    const cagr = await getProjectedAnnualReturn(sym) || 0;
+    const proj = cagr
       ? `${(cagr * 100).toFixed(2)}%`
       : '—';
-    const monthlyPerc = typeof cagr === 'number'
+    const monthlyPerc = cagr
       ? `${((Math.pow(1 + cagr, 1/12) - 1) * 100).toFixed(2)}%`
       : '—';
 
+    // status cells
+    const statusColor = sg === true ? 'green' : sg === false ? 'red' : 'gray';
+    const statusText  = sg === true ? 'Buy Signal confirmed' : sg === false ? 'Sell Signal confirmed' : (pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal');
+
+    // build row: fixed cells, static monthly return, inputs, rolling months, then 5yr
     const tr = document.createElement('tr');
-    tr.dataset.cagr = cagr || 0;
+    tr.dataset.cagr = cagr;
     tr.innerHTML = `
       <td>${sym}</td>
       <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
-      <td style="color:${statusColor(sg, pb)}">${statusText(sg, pb)}</td>
-      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
+      <td style="color:${statusColor}">${statusText}</td>
+      <td>${typeof h1T === 'number' ? h1T.toFixed(4) : h1T}</td>
       <td style="text-align:right;">${proj}</td>
       <td style="text-align:right;">${monthlyPerc}</td>
-      <td style="text-align:right;">${monthlyPerc}</td> <!-- Monthly Return static -->
       <td><input type="number" class="amount-invested" placeholder="0.00" style="width:6em;text-align:right;"/></td>
-      <td><input type="number" class="portfolio-weight" placeholder="%"   style="width:4em;text-align:right;"/></td>
+      <td><input type="number" class="portfolio-weight" placeholder="%" style="width:4em;text-align:right;"/></td>
       ${Array.from({ length: 12 }, (_, i) => `<td class="month-${i+1}" style="text-align:right;"></td>`).join('')}
       <td class="five-year" style="text-align:right;"></td>
     `;
     rows.push(tr);
   }
 
+  // cache & render
   localStorage.setItem('scanner_cache', JSON.stringify({ ts: now, data: rows.map(tr => tr.innerHTML) }));
   renderScannerRows(rows);
   wireUpInvestInputs();
-}
-
-// helper functions
-function statusColor(sg, pb) {
-  if (sg === true) return 'green';
-  if (sg === false) return 'red';
-  return pb ? 'gray' : 'gray';
-}
-function statusText(sg, pb) {
-  if (sg === true) return 'Buy Signal confirmed';
-  if (sg === false) return 'Sell Signal confirmed';
-  return pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal';
 }
 
 // ――― 11b) wireUpInvestInputs ―――
 function wireUpInvestInputs() {
   document.querySelectorAll('#scannerTable tbody tr').forEach(tr => {
     const amtInput = tr.querySelector('.amount-invested');
-    if (!amtInput) return;
     const cagr = parseFloat(tr.dataset.cagr);
-
-    // initialize static cells
-    const monthlyPercCell = tr.children[5];
-    const monthlyStatic = monthlyPercCell.textContent;
-
-    for (let i = 1; i <= 12; i++) {
-      const cell = tr.querySelector(`.month-${i}`);
-      cell.textContent = '';
-    }
-
-    const fiveCell = tr.querySelector('.five-year');
-    fiveCell.textContent = '';
+    if (!amtInput) return;
 
     amtInput.addEventListener('input', () => {
       const amt = Math.max(parseFloat(amtInput.value) || 0, 0);
+      // populate rolling months
       for (let i = 1; i <= 12; i++) {
         const cell = tr.querySelector(`.month-${i}`);
-        if (cell) {
-          const gain = amt * (Math.pow(1 + cagr, i/12) - 1);
-          cell.textContent = gain.toFixed(2);
-        }
+        cell.textContent = (amt * (Math.pow(1 + cagr, i/12) - 1)).toFixed(2);
       }
-      const gain5 = amt * (Math.pow(1 + cagr, 5) - 1);
-      fiveCell.textContent = gain5.toFixed(2);
+      // populate 5yr
+      const fiveCell = tr.querySelector('.five-year');
+      fiveCell.textContent = (amt * (Math.pow(1 + cagr, 5) - 1)).toFixed(2);
     });
   });
 }
