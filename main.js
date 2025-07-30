@@ -444,34 +444,34 @@ Write a concise analysis covering:
   }
 }
 
-// ――― 11) Scanner cache & render helper ―――
-let lastScan = { ts: 0, data: [] };
-function renderScannerRows(rows) {
-  scannerTbody.innerHTML = '';
-  rows.forEach(r=>scannerTbody.append(r));
-}
-
 // ――― 11) runScanner ―――
 async function runScanner() {
   const now   = Date.now();
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // if there's no query AND we're still within the cache window, re‑use it
-  if (!query && (now - lastScan.ts < TTL)) {
+  // 1) try to restore from localStorage if we have a fresh, unfiltered cache
+  const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
+  if (!query && saved.ts && (now - saved.ts) < TTL) {
+    // rebuild <tr> elements from saved HTML
+    lastScan = {
+      ts: saved.ts,
+      data: saved.data.map(html => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = html;
+        return tr;
+      })
+    };
     renderScannerRows(lastScan.data);
     return;
   }
 
-  // otherwise clear old data timestamp (we'll rebuild it below)
-  lastScan = { ts: now, data: [] };
-
-  // build our filtered list (or full list if no query)
+  // 2) otherwise, build a fresh scan
   let list = query
     ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
 
-  // dedupe just in case
+  // dedupe
   const seen = new Set();
   list = list.filter(s => !seen.has(s) && seen.add(s));
 
@@ -481,29 +481,29 @@ async function runScanner() {
   let count = 0;
 
   for (const sym of list) {
-    // when no query, limit to the first 20 results
+    // when no query, limit to first 20
     if (!query && count >= 20) break;
 
-    // daily off‑screen
+    // daily off-screen
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
 
-    // hourly off‑screen
+    // hourly off-screen
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
 
-    // skip uninteresting rows when no query
+    // skip if no query and nothing interesting
     if (!query && pb === false && sg === null) continue;
 
-    // format status cell
+    // status
     let statusText, statusColor;
     if (sg === true)       { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
-    // projected return
+    // projected return (uses your monthly‑TTL cache under the hood)
     let proj = '—';
     const cagr = await getProjectedAnnualReturn(sym);
     if (typeof cagr === 'number') proj = `${(cagr * 100).toFixed(2)}%`;
@@ -521,8 +521,14 @@ async function runScanner() {
     count++;
   }
 
-  // cache & render
+  // 3) cache in‐memory and persist to localStorage
   lastScan = { ts: now, data: rows };
+  localStorage.setItem('scanner_cache', JSON.stringify({
+    ts: now,
+    data: rows.map(tr => tr.innerHTML)
+  }));
+
+  // 4) render
   renderScannerRows(rows);
 }
 
@@ -539,7 +545,8 @@ async function updateDashboard(){
   const bull = drawEMAandProbability('dailyChart');
   drawRSIandSignal('hourlyChart',bull);
   await generateAISummary();
-  await runScanner();
+  //await runScanner();
+// don’t auto-run scanner on load; wait for filter input
 }
 
 // ――― 13) init ―――
