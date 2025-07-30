@@ -464,22 +464,19 @@ async function runScanner() {
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // restore from cache?
+  // try to reuse a fresh, unfiltered cache
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
-  if (!query && saved.ts && (now - saved.ts) < TTL) {
-    lastScan = {
-      ts: saved.ts,
-      data: saved.data.map(html => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = html;
-        return tr;
-      })
-    };
-    renderScannerRows(lastScan.data);
+  if (!query && saved.ts && now - saved.ts < TTL) {
+    const restored = saved.data.map(html => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = html;
+      return tr;
+    });
+    renderScannerRows(restored);
     return;
   }
 
-  // build fresh list
+  // build candidate list
   let list = query
     ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
@@ -488,14 +485,19 @@ async function runScanner() {
   const seen = new Set();
   list = list.filter(s => !seen.has(s) && seen.add(s));
 
+  console.log('🔍 query:', query, '→ candidates:', list);
+
   const rows = [];
-  for (let count = 0; count < list.length; count++) {
-    const sym = list[count];
+  let count = 0;
+
+  for (const sym of list) {
     if (!query && count >= 20) break;
 
-    // fetch + off‑screen render
+    // off‑screen daily → probability
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
+
+    // off‑screen hourly → fib + signal
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
@@ -503,83 +505,59 @@ async function runScanner() {
 
     if (!query && pb === false && sg === null) continue;
 
-    // status cell
+    // status text/color
     let statusText, statusColor;
-    if      (sg === true ) { statusText='Buy Signal confirmed';  statusColor='green'; }
-    else if (sg === false) { statusText='Sell Signal confirmed'; statusColor='red';   }
-    else                   { statusText=pb?'Wait for Buy Signal':'Wait for Sell Signal'; statusColor='gray'; }
+    if (sg === true)       { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
+    else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
+    else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
-    // CAGR & projections
-    let projYear = '—';
-    const cagr  = await getProjectedAnnualReturn(sym);
-    if (typeof cagr === 'number') projYear = `${(cagr * 100).toFixed(2)}%`;
-
-    // monthly rate
-    let mRate = 0, projMonth = '—';
+    // projected annual return
+    let proj = '—';
+    const cagr = await getProjectedAnnualReturn(sym);
     if (typeof cagr === 'number') {
-      mRate = Math.pow(1 + cagr, 1/12) - 1;
-      projMonth = (mRate * 100).toFixed(2) + '%';
+      proj = `${(cagr * 100).toFixed(2)}%`;
     }
 
-    // build row: five existing + 3 new + 12 months + 5yr
+    // monthly return = (1 + CAGR)^(1/12) – 1
+    let monthly = '—';
+    if (typeof cagr === 'number') {
+      const m = Math.pow(1 + cagr, 1/12) - 1;
+      monthly = `${(m * 100).toFixed(2)}%`;
+    }
+
+    // build row with 8 static + 12 future cells
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${sym}</td>
-      <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
-      <td style="color:${statusColor}">${statusText}</td>
-      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
-      <td style="text-align:right;">${projYear}</td>
-
-      <!-- new -->
-      <td style="text-align:right;">${projMonth}</td>
+      <td style="color:${pb?'green':'red'}">
+        ${pb ? 'Bullish' : 'Bearish'}
+      </td>
+      <td style="color:${statusColor}">
+        ${statusText}
+      </td>
+      <td>${typeof h1T === 'number' ? h1T.toFixed(4) : h1T}</td>
+      <td style="text-align:right;">${proj}</td>
+      <td style="text-align:right;">${monthly}</td>
       <td><input type="number" class="amount-invested" placeholder="0.00" /></td>
-      <td><input type="number" class="portfolio-weight"  placeholder="%"  /></td>
-
-      <!-- 12 months -->
-      ${[...Array(12)].map((_,i)=>
-        `<td class="month-${i+1}" style="text-align:right;"></td>`
+      <td><input type="number" class="portfolio-weight" placeholder="%" /></td>
+      ${Array.from({ length: 12 }, (_, i) =>
+        `<td class="month-${i+1}"></td>`
       ).join('')}
-
-      <!-- 5‑year projection -->
-      <td class="proj-5yr" style="text-align:right;"></td>
     `;
-
-    // wire up the amount-invested → fill month & 5yr
-    const amtInput   = tr.querySelector('.amount-invested');
-    const monthCells = Array.from(tr.querySelectorAll('[class^="month-"]'));
-    const cell5yr    = tr.querySelector('.proj-5yr');
-
-    function recompute() {
-      const amt = parseFloat(amtInput.value) || 0;
-      // months
-      monthCells.forEach((cell,i)=>{
-        const profit = amt * ( Math.pow(1 + mRate, i+1) - 1 );
-        cell.textContent = amt>0 ? profit.toFixed(2) : '';
-      });
-      // 5‑year
-      if (amt>0 && typeof cagr === 'number') {
-        const profit5yr = amt * ( Math.pow(1 + cagr, 5) - 1 );
-        cell5yr.textContent = profit5yr.toFixed(2);
-      } else {
-        cell5yr.textContent = '';
-      }
-    }
-
-    amtInput.addEventListener('input', recompute);
-
     rows.push(tr);
+    count++;
   }
 
   // cache + persist
-  lastScan = { ts: now, data: rows };
   localStorage.setItem('scanner_cache', JSON.stringify({
     ts: now,
-    data: rows.map(tr=>tr.innerHTML)
+    data: rows.map(tr => tr.innerHTML)
   }));
 
   // render
   renderScannerRows(rows);
 }
+
 
 
 // ――― 12) updateDashboard ―――
