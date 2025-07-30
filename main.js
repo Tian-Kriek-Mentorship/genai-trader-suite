@@ -464,7 +464,7 @@ async function runScanner() {
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // 1) try to restore from localStorage if we have a fresh, unfiltered cache
+  // 1) try to restore from cache
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
   if (!query && saved.ts && (now - saved.ts) < TTL) {
     lastScan = {
@@ -479,7 +479,7 @@ async function runScanner() {
     return;
   }
 
-  // 2) otherwise, build a fresh scan list
+  // 2) build fresh list
   let list = query
     ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
@@ -491,26 +491,24 @@ async function runScanner() {
   console.log('🔍 query:', query, '→ candidates:', list);
 
   const rows = [];
-  let count = 0;
-
-  for (const sym of list) {
+  for (let count = 0; count < list.length; count++) {
+    const sym = list[count];
     if (!query && count >= 20) break;
 
-    // daily off‑screen
+    // get price data offscreen
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
-
-    // hourly off‑screen
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
 
+    // skip uninteresting
     if (!query && pb === false && sg === null) continue;
 
     // status cell
     let statusText, statusColor;
-    if (sg === true)       { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
+    if      (sg === true ) { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
@@ -519,14 +517,14 @@ async function runScanner() {
     const cagr = await getProjectedAnnualReturn(sym);
     if (typeof cagr === 'number') proj = `${(cagr * 100).toFixed(2)}%`;
 
-    // monthly return = 12th root of (1 + cagr) minus 1
-    let monthly = '—';
+    // monthly return rate
+    let mRate = 0, monthly = '—';
     if (typeof cagr === 'number') {
-      const m = Math.pow(1 + cagr, 1/12) - 1;
-      monthly = (m * 100).toFixed(2) + '%';
+      mRate = Math.pow(1 + cagr, 1/12) - 1;
+      monthly = (mRate * 100).toFixed(2) + '%';
     }
 
-    // build the <tr> with 1+1+1+1+1+1+1+1+12 = 20 tds
+    // build row: 5 existing cols + 3 new + 12 month cols
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${sym}</td>
@@ -535,28 +533,43 @@ async function runScanner() {
       <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
       <td style="text-align:right;">${proj}</td>
 
-      <!-- new columns -->
+      <!-- new -->
       <td style="text-align:right;">${monthly}</td>
       <td><input type="number" class="amount-invested" placeholder="0.00" /></td>
-      <td><input type="number" class="portfolio-weight" placeholder="%" /></td>
+      <td><input type="number" class="portfolio-weight"  placeholder="%"  /></td>
 
-      <!-- 12 future months -->
-      ${[...Array(12)].map((_,i) =>
-        `<td class="month-${i+1}"></td>`
+      ${[...Array(12)].map((_,i)=>
+        `<td class="month-${i+1}" style="text-align:right;"></td>`
       ).join('')}
     `;
+
+    // now wire up the amount‐invested → month‐cells calculation
+    const amtInput    = tr.querySelector('.amount-invested');
+    const monthCells  = Array.from(tr.querySelectorAll('[class^="month-"]'));
+    function recompute() {
+      const amt = parseFloat(amtInput.value)||0;
+      monthCells.forEach((cell,i)=>{
+        // cumulative profit after i+1 months:
+        const profit = amt * ( Math.pow(1 + mRate, i+1) - 1 );
+        cell.textContent = amt > 0
+          ? profit.toFixed(2)
+          : '';
+      });
+    }
+    // update on every keystroke:
+    amtInput.addEventListener('input', recompute);
+
     rows.push(tr);
-    count++;
   }
 
-  // 3) cache in-memory + persist
+  // 3) cache & persist
   lastScan = { ts: now, data: rows };
   localStorage.setItem('scanner_cache', JSON.stringify({
     ts: now,
-    data: rows.map(tr => tr.innerHTML)
+    data: rows.map(tr=>tr.innerHTML)
   }));
 
-  // 4) render into DOM
+  // 4) render
   renderScannerRows(rows);
 }
 
