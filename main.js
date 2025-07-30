@@ -453,11 +453,21 @@ function renderScannerRows(rows) {
 
 // ――― 11) runScanner ―――
 async function runScanner() {
-  const now = Date.now(), TTL = 60*60*1000;
-  if (now - lastScan.ts < TTL) {
+    const now    = Date.now();
+  const TTL    = 60*60*1000; // 1 h
+  const filter = scannerFilter.value.trim().toUpperCase();
+
+  // if there's no filter AND we're still within the cache window, re‑use it
+  if (!filter && (now - lastScan.ts < TTL)) {
     renderScannerRows(lastScan.data);
     return;
   }
+
+  // otherwise, clear out old cache and build a fresh list
+  lastScan = { ts: now, data: [] };
+  const list = filter
+    ? scanSymbols.filter(s => s.toUpperCase().includes(filter))
+    : scanSymbols.slice();
     const filter = scannerFilter.value.trim().toLowerCase();
   let list = filter
     ? scanSymbols.filter(sym => sym.toLowerCase().includes(filter))
