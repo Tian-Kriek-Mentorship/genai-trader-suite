@@ -21,7 +21,7 @@ axiosRetry(axios, {
 // 2) Bottleneck limiter: 1 request at a time, ≥8s between calls
 const limiter = new Bottleneck({
   maxConcurrent: 1,
-  minTime: 8_000
+  minTime: 8000
 });
 
 // 3) Wrapper to fetch series data
@@ -65,8 +65,8 @@ const fetchSeries = limiter.wrap(async (symbol) => {
   return { symbol, data };
 });
 
-// 4) Batch‐aware scanner function
-e**x**port async function runScanner(symbols = []) {
+// 4) Batch-aware scanner function
+export async function runScanner(symbols = []) {
   const results = [];
   for (let i = 0; i < symbols.length; i += 5) {
     const batch = symbols.slice(i, i + 5);
@@ -76,10 +76,10 @@ e**x**port async function runScanner(symbols = []) {
     } catch (err) {
       console.warn('Batch error, retrying after delay:', err);
       // Wait longer on failure
-      await new Promise(r => setTimeout(r, 10_000));
+      await new Promise(r => setTimeout(r, 10000));
     }
     // Small pause between batches
-    await new Promise(r => setTimeout(r, 5_000));
+    await new Promise(r => setTimeout(r, 5000));
   }
   return results;
 }
