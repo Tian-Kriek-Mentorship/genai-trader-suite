@@ -458,11 +458,10 @@ async function runScanner() {
     renderScannerRows(lastScan.data);
     return;
   }
-  const filter = scannerFilter.value.trim().toUpperCase();
-
-let list = filter
-  ? scanSymbols.filter(s => s.includes(filter))
-  : scanSymbols.slice();
+    const filter = scannerFilter.value.trim().toLowerCase();
+  let list = filter
+    ? scanSymbols.filter(sym => sym.toLowerCase().includes(filter))
+    : scanSymbols.slice();
 
 console.log('🔍 filter:', filter, '→ candidates:', list);
 
