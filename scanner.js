@@ -1,36 +1,25 @@
 // scanner.js
+import axios from 'axios';
+import Bottleneck from 'bottleneck';
+import axiosRetry from 'axios-retry';
 
-import axios from 'axios'
-import Bottleneck from 'bottleneck'
-import axiosRetry from 'axios-retry'
-
-// —————————————————————————————————————————————
-// 1. Configure axios to retry on 429/5xx with exponential back‑off
-// —————————————————————————————————————————————
+// 1. Retry on 429 or 5xx with exponential back-off
 axiosRetry(axios, {
-  retries: 3,                        // try up to 3 times
-  retryCondition: (error) => {
-    // only retry on 429 or 500–599
-    return axiosRetry.isNetworkOrIdempotentRequestError(error)
-        || error.response?.status === 429
-  },
-  retryDelay: (retryCount, error) => {
-    // exponential back‑off: 1s, 2s, 4s...
-    return 1000 * Math.pow(2, retryCount - 1)
-  }
-})
+  retries: 3,
+  retryCondition: (error) =>
+    axiosRetry.isNetworkOrIdempotentRequestError(error) ||
+    error.response?.status === 429,
+  retryDelay: (retryCount) =>
+    1000 * Math.pow(2, retryCount - 1) // 1s, 2s, 4s
+});
 
-// —————————————————————————————————————————————
-// 2. Create a Bottleneck limiter
-//    Adjust maxConcurrent and minTime to fit your Twelve Data quota.
-//    For example, if you get 8 calls/min free tier => minTime ≈ 8_000ms.
-// —————————————————————————————————————————————
+// 2. Bottleneck limiter: 1 request at a time, ≥8s between calls
 const limiter = new Bottleneck({
-  maxConcurrent: 1,    // only one request at a time
-  minTime: 8_000       // wait ≥8s between calls (≈7.5 calls/min)
-})
+  maxConcurrent: 1,
+  minTime: 8_000
+});
 
-// Wrap your fetch so it goes through the limiter
+// Wrap your Twelve Data fetch through the limiter
 const fetchSeries = limiter.wrap(async (symbol) => {
   const resp = await axios.get('https://api.twelvedata.com/time_series', {
     params: {
@@ -39,30 +28,28 @@ const fetchSeries = limiter.wrap(async (symbol) => {
       outputsize: 100,
       apikey: import.meta.env.VITE_TWELVEDATA_API_KEY
     }
-  })
+  });
   if (resp.data.status === 'error') {
-    throw new Error(`TD error for ${symbol}: ${resp.data.message}`)
+    throw new Error(`Twelve Data error for ${symbol}: ${resp.data.message}`);
   }
-  return { symbol, data: resp.data.values }
-})
+  return { symbol, data: resp.data.values };
+});
 
-// —————————————————————————————————————————————
-// 3. Batch up your symbols and fire them
-// —————————————————————————————————————————————
+// 3. Batch‐aware scanner function
 export async function runScanner(symbols = []) {
-  const results = []
+  const results = [];
   for (let i = 0; i < symbols.length; i += 5) {
-    const batch = symbols.slice(i, i + 5)
+    const batch = symbols.slice(i, i + 5);
     try {
-      const batchRes = await Promise.all(batch.map(fetchSeries))
-      results.push(...batchRes)
+      const batchRes = await Promise.all(batch.map(fetchSeries));
+      results.push(...batchRes);
     } catch (err) {
-      console.warn('Batch fetch error, continuing after delay:', err)
-      // Wait a bit longer on a hard failure
-      await new Promise((r) => setTimeout(r, 10_000))
+      console.warn('Batch error, retrying after delay:', err);
+      // longer wait on failure
+      await new Promise((r) => setTimeout(r, 10_000));
     }
-    // Optional extra delay between batches
-    await new Promise((r) => setTimeout(r, 5_000))
+    // small pause between batches
+    await new Promise((r) => setTimeout(r, 5_000));
   }
-  return results
+  return results;
 }
