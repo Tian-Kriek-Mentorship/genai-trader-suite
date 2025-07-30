@@ -390,7 +390,7 @@ Write a concise analysis covering:
 }
 
 // ――― 11) Scanner setup ―――
-import { runScanner } from './scanner.js';
+
 
 // Create and render scanner rows based on runScanner output
 async function handleRunScanner() {
