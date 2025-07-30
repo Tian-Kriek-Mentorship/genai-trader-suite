@@ -1,15 +1,15 @@
 {
   "version": 2,
   "builds": [
-    // build your front‑end as static
+    
     { "src": "vite.config.js",       "use": "@vercel/static-build" },
     { "src": "package.json",         "use": "@vercel/static-build" },
 
-    // compile anything under /api as Node lambdas
+    
     { "src": "api/**/*.js",          "use": "@vercel/node" }
   ],
   "routes": [
-    // route any /api/* request to the matching file in /api
+   
     { "src": "/api/(.*)",            "dest": "/api/$1.js" }
   ]
 }
