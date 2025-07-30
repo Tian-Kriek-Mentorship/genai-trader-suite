@@ -501,7 +501,10 @@ async function runScanner() {
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // reuse cache if unfiltered
+  // rebuild header each time
+  buildScannerHeader();
+
+  // try to reuse cache
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
   if (!query && saved.ts && (now - saved.ts) < TTL) {
     const restored = saved.data.map(html => {
@@ -514,7 +517,7 @@ async function runScanner() {
     return;
   }
 
-  // build candidate list
+  // build & dedupe list
   let list = query
     ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
@@ -527,7 +530,6 @@ async function runScanner() {
   for (const sym of list) {
     if (!query && count++ >= 20) break;
 
-    // off-screen calculations
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
@@ -536,13 +538,6 @@ async function runScanner() {
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
     if (!query && pb === false && sg === null) continue;
 
-    // status styling
-    let statusText, statusColor;
-    if      (sg === true)  { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
-    else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
-    else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
-
-    // CAGR values
     const cagr = await getProjectedAnnualReturn(sym);
     const proj = typeof cagr === 'number'
       ? `${(cagr * 100).toFixed(2)}%`
@@ -551,55 +546,71 @@ async function runScanner() {
       ? `${((Math.pow(1 + cagr, 1/12) - 1) * 100).toFixed(2)}%`
       : '—';
 
-    // row setup
     const tr = document.createElement('tr');
     tr.dataset.cagr = cagr || 0;
     tr.innerHTML = `
       <td>${sym}</td>
       <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
-      <td style="color:${statusColor}">${statusText}</td>
+      <td style="color:${statusColor(sg, pb)}">${statusText(sg, pb)}</td>
       <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
       <td style="text-align:right;">${proj}</td>
       <td style="text-align:right;">${monthlyPerc}</td>
+      <td style="text-align:right;">${monthlyPerc}</td> <!-- Monthly Return static -->
       <td><input type="number" class="amount-invested" placeholder="0.00" style="width:6em;text-align:right;"/></td>
-      <td><input type="number" class="portfolio-weight" placeholder="%" style="width:4em;text-align:right;"/></td>
+      <td><input type="number" class="portfolio-weight" placeholder="%"   style="width:4em;text-align:right;"/></td>
       ${Array.from({ length: 12 }, (_, i) => `<td class="month-${i+1}" style="text-align:right;"></td>`).join('')}
       <td class="five-year" style="text-align:right;"></td>
     `;
     rows.push(tr);
   }
 
-  // cache and render
   localStorage.setItem('scanner_cache', JSON.stringify({ ts: now, data: rows.map(tr => tr.innerHTML) }));
   renderScannerRows(rows);
   wireUpInvestInputs();
 }
 
+// helper functions
+function statusColor(sg, pb) {
+  if (sg === true) return 'green';
+  if (sg === false) return 'red';
+  return pb ? 'gray' : 'gray';
+}
+function statusText(sg, pb) {
+  if (sg === true) return 'Buy Signal confirmed';
+  if (sg === false) return 'Sell Signal confirmed';
+  return pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal';
+}
+
 // ――― 11b) wireUpInvestInputs ―――
 function wireUpInvestInputs() {
   document.querySelectorAll('#scannerTable tbody tr').forEach(tr => {
-    const investInput = tr.querySelector('.amount-invested');
-    if (!investInput) return;
+    const amtInput = tr.querySelector('.amount-invested');
+    if (!amtInput) return;
     const cagr = parseFloat(tr.dataset.cagr);
 
-    investInput.addEventListener('input', () => {
-      const amt = Math.max(parseFloat(investInput.value) || 0, 0);
+    // initialize static cells
+    const monthlyPercCell = tr.children[5];
+    const monthlyStatic = monthlyPercCell.textContent;
 
-      // monthly gains
+    for (let i = 1; i <= 12; i++) {
+      const cell = tr.querySelector(`.month-${i}`);
+      cell.textContent = '';
+    }
+
+    const fiveCell = tr.querySelector('.five-year');
+    fiveCell.textContent = '';
+
+    amtInput.addEventListener('input', () => {
+      const amt = Math.max(parseFloat(amtInput.value) || 0, 0);
       for (let i = 1; i <= 12; i++) {
         const cell = tr.querySelector(`.month-${i}`);
         if (cell) {
           const gain = amt * (Math.pow(1 + cagr, i/12) - 1);
-          cell.textContent = gain ? gain.toFixed(2) : '';
+          cell.textContent = gain.toFixed(2);
         }
       }
-
-      // 5-year gain
-      const fiveCell = tr.querySelector('.five-year');
-      if (fiveCell) {
-        const gain5 = amt * (Math.pow(1 + cagr, 5) - 1);
-        fiveCell.textContent = gain5 ? gain5.toFixed(2) : '';
-      }
+      const gain5 = amt * (Math.pow(1 + cagr, 5) - 1);
+      fiveCell.textContent = gain5.toFixed(2);
     });
   });
 }
