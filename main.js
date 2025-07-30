@@ -514,6 +514,20 @@ async function runScanner() {
     });
     renderScannerRows(restored);
     wireUpInvestInputs();
+document.querySelectorAll('#scannerTable tbody tr').forEach(tr => {
+  const amtInput = tr.querySelector('.amount-invested');
+  const cagr = parseFloat(tr.dataset.cagr);
+  const amt = Math.max(parseFloat(amtInput.value) || 0, 0);
+
+  for (let i = 1; i <= 12; i++) {
+    const cell = tr.querySelector(`.month-${i}`);
+    cell.textContent = amt > 0 ? (amt * (Math.pow(1 + cagr, i/12) - 1)).toFixed(2) : '0.00';
+  }
+
+  const fiveCell = tr.querySelector('.five-year');
+  fiveCell.textContent = amt > 0 ? (amt * (Math.pow(1 + cagr, 5) - 1)).toFixed(2) : '0.00';
+});
+
     return;
   }
 
@@ -562,7 +576,8 @@ async function runScanner() {
       <td style="text-align:right;">${proj}</td>
       <td style="text-align:right;">${monthlyPerc}</td>
       <td><input type="number" class="amount-invested" placeholder="0.00" style="width:6em;text-align:right;"/></td>
-      <td><input type="number" class="portfolio-weight" placeholder="%" style="width:4em;text-align:right;"/></td>
+      <td><input type="number" class="amount-invested" placeholder="0.00" style="width:6em;text-align:right;"/></td>
+
       ${Array.from({ length: 12 }, (_, i) => `<td class="month-${i+1}" style="text-align:right;"></td>`).join('')}
       <td class="five-year" style="text-align:right;"></td>
     `;
