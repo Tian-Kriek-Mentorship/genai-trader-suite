@@ -135,36 +135,73 @@ function getPositiveCarryFX() {
   });
 }
 
-// ――― 5) Projected Annual Return ―――
+// ――― 5) Projected Annual Return w/ 30‑day TTL ―――
 async function getProjectedAnnualReturn(sym) {
-  if (projCache[sym] !== undefined) return projCache[sym];
+  const sc = loadCache();
+
+  // ensure our storage object exists
+  sc[sym] = sc[sym] || {};
+  const info = sc[sym].projInfo;
+
+  // 30 days in ms
+  const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+
+  // return cached if fresh
+  if (info && typeof info.proj === 'number' && (Date.now() - info.ts) < MONTH_MS) {
+    return info.proj;
+  }
+
+  let cagr = null;
+
   if (cryptoSymbols.includes(sym)) {
-    const sc = loadCache();
-    if (sc[sym]?.proj != null) return projCache[sym] = sc[sym].proj;
+    // Binance-based CAGR
     try {
       const resp = await axios.get('https://api.binance.com/api/v3/klines', {
-        params:{ symbol: sym, interval: '1M', limit: 60 }
+        params: { symbol: sym, interval: '1M', limit: 60 }
       });
       const d = resp.data;
       const first = parseFloat(d[0][4]), last = parseFloat(d[d.length-1][4]);
-      const yrs = (d.length-1)/12, cagr = Math.pow(last/first,1/yrs)-1;
-      sc[sym] = sc[sym]||{}; sc[sym].proj = cagr; saveCache(sc);
-      return projCache[sym] = cagr;
+      const yrs = (d.length-1)/12;
+      cagr = Math.pow(last/first, 1/yrs) - 1;
     } catch {
-      return projCache[sym] = null;
+      cagr = null;
+    }
+
+  } else {
+    // Twelve Data or equities logic
+    try {
+      const tdSym = toTDSymbol(sym);
+      const r = await axios.get('https://api.twelvedata.com/time_series', {
+        params: {
+          symbol: tdSym,
+          interval: '1month',
+          outputsize: 60,
+          apikey: API_KEY
+        }
+      });
+      if (r.data.status === 'error') throw new Error(r.data.message);
+      const vals = (r.data.values||[]).slice().reverse();
+      if (vals.length > 1) {
+        const rets = [];
+        for (let i = 1; i < vals.length; i++) {
+          const prev = parseFloat(vals[i-1].close),
+                cur  = parseFloat(vals[i].close);
+          rets.push(cur/prev - 1);
+        }
+        // geometrical average over months → annualize by sqrt(12)
+        const avgM = rets.reduce((a,b)=>a+b,0)/rets.length;
+        cagr = Math.pow(1+avgM, 12) - 1;
+      }
+    } catch {
+      cagr = null;
     }
   }
-  if (equitiesSymbols.includes(sym) || etfSymbols.includes(sym)) {
-    // approximate via daily chart data
-    const bars = charts['scannerTempDaily']?.data;
-    if (bars?.length > 1) {
-      const first = bars[0].close, last = bars[bars.length-1].close;
-      const yrs = (bars[bars.length-1].time - bars[0].time)/(365*24*60*60);
-      const cagr = Math.pow(last/first,1/yrs)-1;
-      return projCache[sym] = cagr;
-    }
-  }
-  return projCache[sym] = null;
+
+  // store back to cache
+  sc[sym].projInfo = { proj: cagr, ts: Date.now() };
+  saveCache(sc);
+
+  return cagr;
 }
 
 // ――― 6) fetchAndRender (with cache & rate‑limit fallback) ―――
