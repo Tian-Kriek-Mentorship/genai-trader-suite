@@ -501,7 +501,7 @@ async function runScanner() {
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // try to reuse a fresh, unfiltered cache
+  // reuse cache if unfiltered
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
   if (!query && saved.ts && (now - saved.ts) < TTL) {
     const restored = saved.data.map(html => {
@@ -514,7 +514,7 @@ async function runScanner() {
     return;
   }
 
-  // build & dedupe candidates
+  // build candidate list
   let list = query
     ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
@@ -527,9 +527,9 @@ async function runScanner() {
   for (const sym of list) {
     if (!query && count++ >= 20) break;
 
+    // off-screen calculations
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
-
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
@@ -542,11 +542,16 @@ async function runScanner() {
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
-    // fetch CAGR
+    // CAGR values
     const cagr = await getProjectedAnnualReturn(sym);
-    const proj = typeof cagr === 'number' ? `${(cagr * 100).toFixed(2)}%` : '—';
+    const proj = typeof cagr === 'number'
+      ? `${(cagr * 100).toFixed(2)}%`
+      : '—';
+    const monthlyPerc = typeof cagr === 'number'
+      ? `${((Math.pow(1 + cagr, 1/12) - 1) * 100).toFixed(2)}%`
+      : '—';
 
-    // build row & store raw CAGR
+    // row setup
     const tr = document.createElement('tr');
     tr.dataset.cagr = cagr || 0;
     tr.innerHTML = `
@@ -555,6 +560,7 @@ async function runScanner() {
       <td style="color:${statusColor}">${statusText}</td>
       <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
       <td style="text-align:right;">${proj}</td>
+      <td style="text-align:right;">${monthlyPerc}</td>
       <td><input type="number" class="amount-invested" placeholder="0.00" style="width:6em;text-align:right;"/></td>
       <td><input type="number" class="portfolio-weight" placeholder="%" style="width:4em;text-align:right;"/></td>
       ${Array.from({ length: 12 }, (_, i) => `<td class="month-${i+1}" style="text-align:right;"></td>`).join('')}
@@ -563,7 +569,7 @@ async function runScanner() {
     rows.push(tr);
   }
 
-  // persist & render
+  // cache and render
   localStorage.setItem('scanner_cache', JSON.stringify({ ts: now, data: rows.map(tr => tr.innerHTML) }));
   renderScannerRows(rows);
   wireUpInvestInputs();
@@ -577,22 +583,22 @@ function wireUpInvestInputs() {
     const cagr = parseFloat(tr.dataset.cagr);
 
     investInput.addEventListener('input', () => {
-      const amt = parseFloat(investInput.value) || 0;
+      const amt = Math.max(parseFloat(investInput.value) || 0, 0);
 
-      // fill each month cell
+      // monthly gains
       for (let i = 1; i <= 12; i++) {
         const cell = tr.querySelector(`.month-${i}`);
         if (cell) {
-          const gain = amt * (Math.pow(1 + cagr, i / 12) - 1);
-          cell.textContent = !isNaN(gain) ? gain.toFixed(2) : '';
+          const gain = amt * (Math.pow(1 + cagr, i/12) - 1);
+          cell.textContent = gain ? gain.toFixed(2) : '';
         }
       }
 
-      // fill 5‑year cell
+      // 5-year gain
       const fiveCell = tr.querySelector('.five-year');
       if (fiveCell) {
         const gain5 = amt * (Math.pow(1 + cagr, 5) - 1);
-        fiveCell.textContent = !isNaN(gain5) ? gain5.toFixed(2) : '';
+        fiveCell.textContent = gain5 ? gain5.toFixed(2) : '';
       }
     });
   });
