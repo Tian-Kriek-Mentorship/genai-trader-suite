@@ -443,6 +443,12 @@ Write a concise analysis covering:
     outPre.textContent = `❌ AI error: ${e.message}`;
   }
 }
+// ――― 11) Scanner cache & render helper ―――
+let lastScan = { ts: 0, data: [] };
+function renderScannerRows(rows) {
+  scannerTbody.innerHTML = '';
+  rows.forEach(r => scannerTbody.append(r));
+}
 
 // ――― 11) runScanner ―――
 async function runScanner() {
