@@ -2,6 +2,9 @@
 import OpenAI from "openai";
 
 export default async function handler(req, res) {
+  // 🔥 DEBUGGING: make sure our key is set
+  console.log("🔑 OPENAI_API_KEY present?", !!process.env.OPENAI_API_KEY);
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -16,7 +19,7 @@ export default async function handler(req, res) {
 
   try {
     const chat = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",           // ← you can switch to this for testing
       messages: [
         { role: "system", content: "You’re a concise market‑analysis assistant." },
         { role: "user",   content: prompt },
