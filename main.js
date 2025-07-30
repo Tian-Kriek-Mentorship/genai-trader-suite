@@ -453,14 +453,14 @@ function renderScannerRows(rows) {
 
 // ――― 11) runScanner ―――
 async function runScanner() {
-    const now    = Date.now();
-  const TTL    = 60*60*1000; // 1 h
-  const filter = scannerFilter.value.trim().toUpperCase();
+     const now   = Date.now();
+  const TTL   = 60*60*1000; // 1 h
+  const query = scannerFilter.value.trim().toUpperCase();
 
-  // if there's no filter AND we're still within the cache window, re‑use it
-  if (!filter && (now - lastScan.ts < TTL)) {
-    renderScannerRows(lastScan.data);
-    return;
+    // if there's no query AND we're still within the cache window, re‑use it
+  if (!query && (now - lastScan.ts < TTL)) {
+     renderScannerRows(lastScan.data);
+     return;
   }
 
   // otherwise, clear out old cache and build a fresh list
@@ -469,8 +469,8 @@ async function runScanner() {
     ? scanSymbols.filter(s => s.toUpperCase().includes(filter))
     : scanSymbols.slice();
     const filter = scannerFilter.value.trim().toLowerCase();
-  let list = filter
-    ? scanSymbols.filter(sym => sym.toLowerCase().includes(filter))
+    let list = query
+    ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
 
 console.log('🔍 filter:', filter, '→ candidates:', list);
