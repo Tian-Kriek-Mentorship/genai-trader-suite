@@ -420,7 +420,9 @@ async function runScanner() {
     return;
   }
   const filter = scannerFilter.value.trim().toUpperCase();
-  let list = filter ? scanSymbols.filter(s=>s.includes(filter)) : scanSymbols.slice();
+  let list = filter
+ ? scanSymbols.filter(s => s.includes(filter))
+ : scanSymbols.slice();
   const seen = new Set();
   list = list.filter(s=>!seen.has(s)&&seen.add(s));
   const rows=[], {length}=list;
