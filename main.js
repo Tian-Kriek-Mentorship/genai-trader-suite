@@ -489,13 +489,12 @@ function renderScannerRows(rows) {
   scannerTbody.innerHTML = '';
   rows.forEach(r => scannerTbody.append(r));
 }
-// ――― 11) runScanner ―――
 async function runScanner() {
   const now   = Date.now();
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // try to reuse a fresh, unfiltered cache
+  // try to reuse cache...
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
   if (!query && saved.ts && now - saved.ts < TTL) {
     const restored = saved.data.map(html => {
@@ -507,86 +506,76 @@ async function runScanner() {
     return;
   }
 
-  // build candidate list
+  // build & dedupe list...
   let list = query
-    ? scanSymbols.filter(s => s.toUpperCase().includes(query))
+    ? scanSymbols.filter(s => s.includes(query))
     : scanSymbols.slice();
-
-  // dedupe
   const seen = new Set();
   list = list.filter(s => !seen.has(s) && seen.add(s));
-
-  console.log('🔍 query:', query, '→ candidates:', list);
 
   const rows = [];
   let count = 0;
 
   for (const sym of list) {
-    if (!query && count >= 20) break;
+    if (!query && count++ >= 20) break;
 
-    // off‑screen daily → probability
+    // off‑screen fetch & indicators
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
-
-    // off‑screen hourly → fib + signal
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
-
     if (!query && pb === false && sg === null) continue;
 
-    // status text/color
+    // status cell
     let statusText, statusColor;
     if (sg === true)       { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
-    // projected annual return
+    // CAGR‑based values
     const cagr = await getProjectedAnnualReturn(sym);
-    const proj = (typeof cagr === 'number')
-      ? `${(cagr * 100).toFixed(2)}%`
+    const proj   = typeof cagr === 'number' ? `${(cagr*100).toFixed(2)}%` : '—';
+    const monthly = typeof cagr === 'number'
+      ? `${((Math.pow(1+cagr,1/12)-1)*100).toFixed(2)}%`
+      : '—';
+    const fiveYr = typeof cagr === 'number'
+      ? `${((Math.pow(1+cagr,5)-1)*100).toFixed(2)}%`
       : '—';
 
-    // monthly return = (1 + CAGR)^(1/12) – 1
-    const monthly = (typeof cagr === 'number')
-      ? `${((Math.pow(1 + cagr, 1/12) - 1) * 100).toFixed(2)}%`
-      : '—';
-
-    // 5 yr projection = (1 + CAGR)^5 – 1
-    const fiveYr = (typeof cagr === 'number')
-      ? `${((Math.pow(1 + cagr, 5) - 1) * 100).toFixed(2)}%`
-      : '—';
-
-    // build row: 8 fixed columns, then 12 months, then 5yr last
+    // build the row: 8 static → 12 months → 5yr last
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <!-- 1–8: fixed -->
       <td>${sym}</td>
       <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
       <td style="color:${statusColor}">${statusText}</td>
       <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
       <td style="text-align:right;">${proj}</td>
       <td style="text-align:right;">${monthly}</td>
-      <td><input type="number" class="amount-invested"  placeholder="0.00" /></td>
-      <td><input type="number" class="portfolio-weight" placeholder="%"   /></td>
+      <td><input type="number" class="amount-invested"  placeholder="0.00"/></td>
+      <td><input type="number" class="portfolio-weight" placeholder="%"/></td>
+
+      <!-- 9–20: rolling months -->
       ${Array.from({ length: 12 }, (_, i) =>
         `<td class="month-${i+1}"></td>`
       ).join('')}
+
+      <!-- 21: 5yr projection -->
       <td style="text-align:right;">${fiveYr}</td>
     `;
     rows.push(tr);
-    count++;
   }
 
-  // cache + persist
+  // cache + render
   localStorage.setItem('scanner_cache', JSON.stringify({
     ts: now,
     data: rows.map(tr => tr.innerHTML)
   }));
-
-  // render
   renderScannerRows(rows);
 }
+
 
 
 
