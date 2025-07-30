@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Liquidity‑Cycle Dashboard (v0.1)</title>
+  <title>Liquidity-Cycle Dashboard (v0.1)</title>
   <link rel="icon" href="/favicon.png" />
   <style>
     body {
@@ -65,29 +65,28 @@
     /* Scanner table styling */
     #scannerTable {
       border-collapse: collapse;
-      table-layout: auto;       /* auto sized columns */
-      width: auto;              /* shrink to fit */
+      table-layout: auto;
+      width: auto;
       margin-top: 0.5rem;
     }
     #scannerTable th,
     #scannerTable td {
       border: 1px solid #ddd;
-      padding: 0.25rem 0.5rem;  /* less padding */
-      white-space: nowrap;      /* no wrapping */
+      padding: 0.25rem 0.5rem;
+      white-space: nowrap;
       text-align: left;
     }
     #scannerTable th {
       background-color: #f0f0f0;
       font-weight: bold;
     }
-    /* allow horizontal scroll if still too wide */
     .scanner-container {
       overflow-x: auto;
     }
   </style>
 </head>
 <body>
-  <h1>Liquidity‑Cycle Dashboard (v0.1)</h1>
+  <h1>Liquidity-Cycle Dashboard (v0.1)</h1>
 
   <div style="margin-bottom: 1rem;">
     <label for="symbolInput" style="font-size:20px; margin-right:0.5rem;">
@@ -122,8 +121,8 @@
           <th>Symbol</th>
           <th>Probability</th>
           <th>Signal</th>
-          <th>H1 Target</th>
-          <th>Projected Annual Return</th>
+          <th>H1 Target</th>
+          <th>Projected Annual Return</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -131,24 +130,21 @@
   </div>
 
   <div class="explanation">
-    <h3>❗ What Is the Liquidity‑Cycle Dashboard (v0.1)?</h3>
-    <p>The Liquidity‑Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
-    <p>Instead of watching dozens of charts or guessing when to trade, this dashboard shows you how Bitcoin (BTCUSDT) is behaving across two key timeframes:</p>
+    <h3>❗ What Is the Liquidity-Cycle Dashboard (v0.1)?</h3>
+    <p>The Liquidity-Cycle Dashboard helps traders understand where money is flowing in and out of the crypto market.</p>
     <ul>
       <li>📅 <strong>Daily chart</strong> – the big picture trend</li>
       <li>🕐 <strong>Hourly chart</strong> – short-term moves</li>
     </ul>
     <p><strong>The goal?</strong><br>
     To spot shifts in momentum and liquidity – so you trade with the market, not against it.</p>
-
-    <h4>Why It’s Called “Liquidity‑Cycle”</h4>
-    <p>In every market, price moves in cycles – from accumulation to expansion, then slowdown and reversal. These cycles are driven by liquidity (where the money is). This dashboard makes it easier to:</p>
+    <h4>Why It’s Called “Liquidity-Cycle”</h4>
+    <p>In every market, price moves in cycles – from accumulation to expansion, then slowdown and reversal. This dashboard makes it easier to:</p>
     <ul>
       <li>✅ See when buyers/sellers are taking control</li>
       <li>✅ Time entries during expansions, not chop</li>
       <li>✅ Avoid trades when liquidity dries up</li>
     </ul>
-
     <h4>What’s “v0.1”?</h4>
     <p>This is the first public version, focused only on BTC/USDT.<br>
     Future updates will include:</p>
@@ -160,31 +156,24 @@
     </ul>
   </div>
 
-  <!-- scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.8/dist/axios.min.js"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
-  <script>
-  window.TD_API_KEY = '1eed79e08f4a4d6092a9b4e634c3bbf8';
-  console.log('🚀 TD API key is:', window.TD_API_KEY);
-</script>
-<script type="module" src="/main.js"></script>
-
   <div id="rateLimitBanner" style="
-  display: none;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  padding: 0.75rem;
-  background: #ffea00;
-  color: #333;
-  font-weight: bold;
-  text-align: center;
-  box-shadow: 0 -2px 4px rgba(0,0,0,0.2);
-  z-index: 9999;
-">
-  ⚠️ You have run out of Twelve Data API credits. Charts are frozen until your rate limit resets.
-</div>
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 0.75rem;
+    background: #ffea00;
+    color: #333;
+    font-weight: bold;
+    text-align: center;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.2);
+    z-index: 9999;
+  ">
+    ⚠️ You have run out of Twelve Data API credits. Charts are frozen until your rate limit resets.
+  </div>
 
+  <!-- Vite will bundle and serve src/main.js -->
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>
