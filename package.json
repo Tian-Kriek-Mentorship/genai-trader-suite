@@ -24,7 +24,7 @@
     "lightweight-charts": "^5.0.8",
     "vite": "^5.2.0",
     "bottleneck": "^2.19.5",
-    "axios-retry": "^3.3.1"
+    "axios-retry": "^3.3.1",
     "openai": "^5.10.3"
   }
 }
