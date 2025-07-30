@@ -52,6 +52,8 @@ const scanCrypto = cryptoSymbols.slice(0, 20);
 const scanStocks = equitiesSymbols.slice(0, 50);
 const scanForex  = forexSymbols.slice(0, 27);
 const scanSymbols = [...scanCrypto, ...scanStocks, ...scanForex];
+window.scanSymbols = scanSymbols;
+console.log('🪄 scanSymbols =', scanSymbols);
 
 const projCache    = {};
 let interestRates  = {};
