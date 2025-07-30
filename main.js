@@ -254,7 +254,7 @@ async function fetchAndRender(symbol, interval, containerId) {
   const c = document.getElementById(containerId);
   c.innerHTML = '';
   const chart = LightweightCharts.createChart(c, {
-    layout:           { textColor: '#000' },
+    layout:           { textColor: '#000' ,
     fontSize: 16,          
     fontFamily: 'Arial'   },
     rightPriceScale:  { scaleMargins: { top: 0.3, bottom: 0.1 } },
