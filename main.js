@@ -501,9 +501,9 @@ async function runScanner() {
   const TTL   = 60 * 60 * 1000; // 1 h
   const query = scannerFilter.value.trim().toUpperCase();
 
-  // try to reuse cache…
+  // attempt to reuse a fresh, unfiltered cache
   const saved = JSON.parse(localStorage.getItem('scanner_cache') || '{}');
-  if (!query && saved.ts && now - saved.ts < TTL) {
+  if (!query && saved.ts && (now - saved.ts) < TTL) {
     const restored = saved.data.map(html => {
       const tr = document.createElement('tr');
       tr.innerHTML = html;
@@ -514,7 +514,7 @@ async function runScanner() {
     return;
   }
 
-  // build & dedupe list…
+  // build & dedupe candidates
   let list = query
     ? scanSymbols.filter(s => s.toUpperCase().includes(query))
     : scanSymbols.slice();
@@ -536,14 +536,17 @@ async function runScanner() {
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
     if (!query && pb === false && sg === null) continue;
 
+    // status styling
     let statusText, statusColor;
     if      (sg === true)  { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
+    // fetch CAGR
     const cagr = await getProjectedAnnualReturn(sym);
     const proj = typeof cagr === 'number' ? `${(cagr * 100).toFixed(2)}%` : '—';
 
+    // build row & store raw CAGR for later use
     const tr = document.createElement('tr');
     tr.dataset.cagr = cagr || 0;
     tr.innerHTML = `
@@ -553,7 +556,7 @@ async function runScanner() {
       <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
       <td style="text-align:right;">${proj}</td>
       <td><input type="number" class="amount-invested" placeholder="0.00" style="width:6em;text-align:right;"/></td>
-      <td><input type="number" class="portfolio-weight" placeholder="%" style="width:4em;text-align:right;"/></td>
+      <td><input type="number" class="portfolio-weight" placeholder="%"    style="width:4em;text-align:right;"/></td>
       ${Array.from({ length: 12 }, (_, i) => `<td class="month-${i+1}" style="text-align:right;"></td>`).join('')}
       <td class="five-year" style="text-align:right;"></td>
     `;
@@ -565,7 +568,8 @@ async function runScanner() {
   wireUpInvestInputs();
 }
 
-// hook inputs after table is renderedunction wireUpInvestInputs() {
+// ――― 11b) wireUpInvestInputs ―――
+function wireUpInvestInputs() {
   document.querySelectorAll('#scannerTable tbody tr').forEach(tr => {
     const investInput = tr.querySelector('.amount-invested');
     if (!investInput) return;
@@ -574,7 +578,7 @@ async function runScanner() {
     investInput.addEventListener('input', () => {
       const amt = parseFloat(investInput.value) || 0;
 
-      // months 1–12
+      // calculate & fill each month cell
       for (let i = 1; i <= 12; i++) {
         const cell = tr.querySelector(`.month-${i}`);
         if (cell) {
@@ -583,7 +587,7 @@ async function runScanner() {
         }
       }
 
-      // 5 yr
+      // calculate & fill 5‑year projection
       const fiveCell = tr.querySelector('.five-year');
       if (fiveCell) {
         const gain5 = amt * (Math.pow(1 + cagr, 5) - 1);
@@ -591,6 +595,7 @@ async function runScanner() {
       }
     });
   });
+
 
 
 
