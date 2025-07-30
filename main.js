@@ -405,56 +405,45 @@ function drawRSIandSignal(cid, dailyBullish) {
 async function generateAISummary() {
   const sym = symbolInput.value;
   outPre.textContent = `Loading AI summary for ${sym}…`;
+
+  // 1) capture state indicators
   const bull = drawEMAandProbability('dailyChart');
   const sig  = drawRSIandSignal('hourlyChart', bull);
-  const tgt  = charts.hourlyChart?.fibTarget ?? '—';
-  // average monthly return
-  let avgRet = 'N/A';
-  try {
-    const resp = await axios.get('https://api.twelvedata.com/time_series', {
-      params: { symbol: sym, interval: '1month', outputsize: 60, apikey: API_KEY }
-    });
-    let vals = (resp.data.values||[]).slice().reverse();
-    if (vals.length>1) {
-      const rets = [];
-      for (let i=1; i<vals.length; i++) {
-        const prev = parseFloat(vals[i-1].close), cur = parseFloat(vals[i].close);
-        rets.push((cur/prev -1)*100);
-      }
-      avgRet = `${(rets.reduce((a,b)=>a+b,0)/rets.length).toFixed(2)}%`;
-    }
-  } catch {}
+
+  // 2) get both fib targets
+  const dailyTgt  = charts.dailyChart?.fibTarget  ?? '—';
+  const hourlyTgt = charts.hourlyChart?.fibTarget ?? '—';
+
+  // 3) use your shared CAGR helper
+  let proj = 'N/A';
+  const cagr = await getProjectedAnnualReturn(sym);
+  if (typeof cagr === 'number') {
+    proj = `${(cagr * 100).toFixed(2)}%`;
+  }
+
+  // 4) build prompt with the exact same proj value
   const prompt = `
 Symbol: ${sym}
 Probability (45‑EMA): ${bull ? 'Bullish' : 'Bearish'}
 H1 Signal: ${sig ? 'Buy Signal confirmed' : 'Wait for signal'}
-Fibonacci Target (Daily): ${charts.dailyChart.fibTarget ?? '—'}
-Fibonacci Target (1h): ${charts.hourlyChart.fibTarget ?? '—'}
-Projected Annual Return: ${avgRet}
+Daily Fibonacci Target: ${dailyTgt}
+Hourly Fibonacci Target: ${hourlyTgt}
+Projected Annual Return: ${proj}
 
-1. Overall sentiment.
-2. Probability (as above).
-3. Current signal.
-4. Longer‑term (daily) Fibo target.
-5. Short‑term (hourly) Fibo target.
-6. Projected annual return.
-7. Explain the symbol’s history, purpose & use‑cases.
-`;
+Write a concise analysis covering:
+1. The current state of ${sym} and overall market sentiment.
+2. Major upcoming announcements or events that could impact it.
+3. How the probability, signals, and targets fit into this context.
+  `;
 
+  // 5) call AI
   try {
     const ai = await axios.post('/api/ai', { prompt });
-    outPre.textContent = ai.data.summary || ai.data.text || JSON.stringify(ai.data, null, 2);
-  } catch(e) {
+    outPre.textContent = ai.data.summary;
+  } catch (e) {
     outPre.textContent = `❌ AI error: ${e.message}`;
   }
 }
-// ――― 11) Scanner cache & render helper ―――
-let lastScan = { ts: 0, data: [] };
-function renderScannerRows(rows) {
-  scannerTbody.innerHTML = '';
-  rows.forEach(r => scannerTbody.append(r));
-}
-
 // ――― 11) runScanner ―――
 async function runScanner() {
   const now   = Date.now();
