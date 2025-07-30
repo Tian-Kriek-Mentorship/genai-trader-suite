@@ -495,6 +495,7 @@ function renderScannerRows(rows) {
   scannerTbody.innerHTML = '';
   rows.forEach(r => scannerTbody.append(r));
 }
+// ――― 11) runScanner ―――
 async function runScanner() {
   const now   = Date.now();
   const TTL   = 60 * 60 * 1000; // 1 h
@@ -526,90 +527,71 @@ async function runScanner() {
   for (const sym of list) {
     if (!query && count++ >= 20) break;
 
-    // off‑screen daily → probability
     await fetchAndRender(sym, '1d', 'scannerTempDaily');
     const pb = drawEMAandProbability('scannerTempDaily');
 
-    // off‑screen hourly → fib + signal
     await fetchAndRender(sym, '1h', 'scannerTempHourly');
     drawFibsOnChart('scannerTempHourly');
     const h1T = charts.scannerTempHourly?.fibTarget ?? '—';
     const sg  = drawRSIandSignal('scannerTempHourly', pb);
-
     if (!query && pb === false && sg === null) continue;
 
-    // status text/color
     let statusText, statusColor;
     if      (sg === true)  { statusText = 'Buy Signal confirmed';  statusColor = 'green'; }
     else if (sg === false) { statusText = 'Sell Signal confirmed'; statusColor = 'red';   }
     else                   { statusText = pb ? 'Wait for Buy Signal' : 'Wait for Sell Signal'; statusColor = 'gray'; }
 
-    // CAGR‐based values
     const cagr = await getProjectedAnnualReturn(sym);
-    const proj = typeof cagr === 'number'
-               ? `${(cagr * 100).toFixed(2)}%`
-               : '—';
+    const proj = typeof cagr === 'number' ? `${(cagr * 100).toFixed(2)}%` : '—';
 
-    // build row: 1–8 fixed → 9–20 months → 21 empty five‑year
     const tr = document.createElement('tr');
-    // stash cagr on the row for later
     tr.dataset.cagr = cagr || 0;
-
     tr.innerHTML = `
       <td>${sym}</td>
       <td style="color:${pb?'green':'red'}">${pb?'Bullish':'Bearish'}</td>
       <td style="color:${statusColor}">${statusText}</td>
-      <td>${typeof h1T==='number' ? h1T.toFixed(4) : h1T}</td>
+      <td>${typeof h1T==='number'?h1T.toFixed(4):h1T}</td>
       <td style="text-align:right;">${proj}</td>
       <td><input type="number" class="amount-invested" placeholder="0.00" style="width:6em;text-align:right;"/></td>
       <td><input type="number" class="portfolio-weight" placeholder="%" style="width:4em;text-align:right;"/></td>
-
-      ${Array.from({ length: 12 }, (_, i) =>
-        `<td class="month-${i+1}" style="text-align:right;"></td>`
-      ).join('')}
-
+      ${Array.from({ length: 12 }, (_, i) => `<td class="month-${i+1}" style="text-align:right;"></td>`).join('')}
       <td class="five-year" style="text-align:right;"></td>
     `;
-
     rows.push(tr);
   }
 
-  // cache + persist
-  localStorage.setItem('scanner_cache', JSON.stringify({
-    ts: now,
-    data: rows.map(tr => tr.innerHTML)
-  }));
-
-  // render + hook inputs
+  localStorage.setItem('scanner_cache', JSON.stringify({ ts: now, data: rows.map(tr => tr.innerHTML) }));
   renderScannerRows(rows);
   wireUpInvestInputs();
 }
 
-// after you render the rows, call this to hook up each input
-function wireUpInvestInputs() {
+// hook inputs after table is renderedunction wireUpInvestInputs() {
   document.querySelectorAll('#scannerTable tbody tr').forEach(tr => {
     const investInput = tr.querySelector('.amount-invested');
+    if (!investInput) return;
     const cagr = parseFloat(tr.dataset.cagr);
+
     investInput.addEventListener('input', () => {
       const amt = parseFloat(investInput.value) || 0;
 
       // months 1–12
       for (let i = 1; i <= 12; i++) {
         const cell = tr.querySelector(`.month-${i}`);
-        const gain = amt * (Math.pow(1 + cagr, i / 12) - 1);
-        cell.textContent = gain ? gain.toFixed(2) : '';
+        if (cell) {
+          const gain = amt * (Math.pow(1 + cagr, i / 12) - 1);
+          cell.textContent = gain ? gain.toFixed(2) : '';
+        }
       }
 
-      // 5 yr projection cell
+      // 5 yr
       const fiveCell = tr.querySelector('.five-year');
-      const gain5 = amt * (Math.pow(1 + cagr, 5) - 1);
-      fiveCell.textContent = gain5 ? gain5.toFixed(2) : '';
+      if (fiveCell) {
+        const gain5 = amt * (Math.pow(1 + cagr, 5) - 1);
+        fiveCell.textContent = gain5 ? gain5.toFixed(2) : '';
+      }
     });
   });
 }
-
-
-
 
 // ――― 12) updateDashboard ―――
 async function updateDashboard(){
