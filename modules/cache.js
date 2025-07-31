@@ -1,7 +1,5 @@
-// cache.js — localStorage cache with 30-min TTL
-
 const CACHE_KEY = 'gtm_cache';
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes in milliseconds
+const CACHE_TTL = 30 * 60 * 1000;
 
 export function loadCache() {
   try {
