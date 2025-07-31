@@ -12,17 +12,17 @@ window.addEventListener('message', (event) => {
 
 const emailFromGhost = localStorage.getItem('gtm_user_email');
 
-// ✅ Delay access check to allow postMessage from Ghost
-if (!emailFromGhost) {
-  setTimeout(() => {
-    if (!localStorage.getItem('gtm_user_email')) {
-      document.body.innerHTML = `
-        <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
-          Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
-        </h2>`;
-      throw new Error('Not logged in');
-    }
-  }, 2000); // wait 2 seconds for Ghost to postMessage
+// Delay the login check to allow postMessage time to arrive
+setTimeout(() => {
+  if (!emailFromGhost) {
+    document.body.innerHTML = `
+      <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
+        Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
+      </h2>`;
+    throw new Error('Not logged in');
+  }
+}, 1500); // wait 1.5 seconds
+
 }
 
 window.loggedInUserEmail = emailFromGhost;
