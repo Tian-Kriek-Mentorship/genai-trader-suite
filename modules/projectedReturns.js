@@ -1,15 +1,25 @@
+// projectedReturns.js
+
 import axios from 'axios';
 import { loadCache, saveCache } from './cache.js';
 import { cryptoSymbols, forexSymbols } from './symbols.js';
 
 const API_KEY = window.TD_API_KEY;
 
+// Translate symbol format for Twelve Data
 function toTDSymbol(sym) {
   if (cryptoSymbols.includes(sym)) return null;
   if (forexSymbols.includes(sym)) return `${sym.slice(0, 3)}/${sym.slice(3)}`;
   return sym;
 }
 
+/**
+ * Calculates projected Compound Annual Growth Rate (CAGR)
+ * for a given symbol using Binance or Twelve Data APIs.
+ *
+ * @param {string} sym
+ * @returns {Promise<number|null>}
+ */
 export async function getProjectedAnnualReturn(sym) {
   const sc = loadCache();
   sc[sym] = sc[sym] || {};
@@ -23,19 +33,24 @@ export async function getProjectedAnnualReturn(sym) {
 
   let cagr = null;
 
+  // Crypto CAGR via Binance
   if (cryptoSymbols.includes(sym)) {
     try {
       const resp = await axios.get('https://api.binance.com/api/v3/klines', {
         params: { symbol: sym, interval: '1M', limit: 60 }
       });
       const d = resp.data;
-      const first = parseFloat(d[0][4]), last = parseFloat(d[d.length - 1][4]);
+      const first = parseFloat(d[0][4]);
+      const last = parseFloat(d[d.length - 1][4]);
       const yrs = (d.length - 1) / 12;
       cagr = Math.pow(last / first, 1 / yrs) - 1;
     } catch {
       cagr = null;
     }
-  } else {
+  }
+
+  // Forex/Equities CAGR via Twelve Data
+  else {
     try {
       const tdSym = toTDSymbol(sym);
       const r = await axios.get('https://api.twelvedata.com/time_series', {
@@ -46,13 +61,14 @@ export async function getProjectedAnnualReturn(sym) {
           apikey: API_KEY
         }
       });
+
       if (r.data.status === 'error') throw new Error(r.data.message);
       const vals = (r.data.values || []).slice().reverse();
       if (vals.length > 1) {
         const rets = [];
         for (let i = 1; i < vals.length; i++) {
-          const prev = parseFloat(vals[i - 1].close),
-                cur  = parseFloat(vals[i].close);
+          const prev = parseFloat(vals[i - 1].close);
+          const cur = parseFloat(vals[i].close);
           rets.push(cur / prev - 1);
         }
         const avgM = rets.reduce((a, b) => a + b, 0) / rets.length;
@@ -63,6 +79,7 @@ export async function getProjectedAnnualReturn(sym) {
     }
   }
 
+  // Cache the result
   sc[sym].projInfo = { proj: cagr, ts: Date.now() };
   saveCache(sc);
 
