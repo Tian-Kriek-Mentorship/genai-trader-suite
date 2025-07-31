@@ -1,25 +1,38 @@
 // main.js
 
 // ✅ Auth handshake with Ghost via postMessage
+// main.js
+
+let loggedInUserEmail = null;
 const allowedOrigins = ['https://tiankriek.com'];
 
+// ✅ Wait for login email via postMessage from Ghost
 window.addEventListener('message', (event) => {
   if (allowedOrigins.includes(event.origin) && event.data.email) {
     localStorage.setItem('gtm_user_email', event.data.email);
-    location.reload(); // Refresh so init() sees the login
+    loggedInUserEmail = event.data.email;
+    initDashboard(); // 👉 Start dashboard only after receiving email
   }
 });
 
-setTimeout(() => {
-  const email = localStorage.getItem('gtm_user_email');
-  if (!email) {
-    document.body.innerHTML = `
-      <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
-        Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
-      </h2>`;
-    throw new Error('Not logged in');
-  }
-}, 1500);
+// ✅ Fallback: check localStorage in case user refreshed
+const storedEmail = localStorage.getItem('gtm_user_email');
+if (storedEmail) {
+  loggedInUserEmail = storedEmail;
+  initDashboard();
+} else {
+  // Wait max 5s for postMessage before blocking
+  setTimeout(() => {
+    if (!loggedInUserEmail) {
+      document.body.innerHTML = `
+        <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
+          Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
+        </h2>`;
+      throw new Error('Not logged in');
+    }
+  }, 5000);
+}
+
 
 
 
