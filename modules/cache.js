@@ -1,5 +1,7 @@
+// cache.js
+
 const CACHE_KEY = 'gtm_cache';
-const CACHE_TTL = 30 * 60 * 1000;
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 export function loadCache() {
   try {
