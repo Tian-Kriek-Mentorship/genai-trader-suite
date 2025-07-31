@@ -1,14 +1,32 @@
 // main.js
 
+// ✅ Auth handshake with Ghost via postMessage
 const allowedOrigins = ['https://tiankriek.com'];
 
-// ⏳ Wait for Ghost email via postMessage
 window.addEventListener('message', (event) => {
   if (allowedOrigins.includes(event.origin) && event.data.email) {
     localStorage.setItem('gtm_user_email', event.data.email);
-    location.reload();
+    location.reload(); // Refresh so init() sees the login
   }
 });
+
+const emailFromGhost = localStorage.getItem('gtm_user_email');
+
+// ✅ Delay access check to allow postMessage from Ghost
+if (!emailFromGhost) {
+  setTimeout(() => {
+    if (!localStorage.getItem('gtm_user_email')) {
+      document.body.innerHTML = `
+        <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
+          Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
+        </h2>`;
+      throw new Error('Not logged in');
+    }
+  }, 2000); // wait 2 seconds for Ghost to postMessage
+}
+
+window.loggedInUserEmail = emailFromGhost;
+
 
 // ✅ Modular Imports
 import { loadCache, saveCache } from './modules/cache.js';
