@@ -12,7 +12,10 @@ import './modules/rateLimit.js';
 let loggedInUserEmail = null;
 
 // ✅ Step 1: Call WP AJAX to get logged-in user email
-fetch('https://tiankriek.com/wp-admin/admin-ajax.php?action=get_user_email')
+fetch('https://tiankriek.com/wp-admin/admin-ajax.php?action=get_user_email', {
+  credentials: 'include'
+})
+
   .then(res => res.json())
   .then(data => {
     if (data.email) {
