@@ -1,6 +1,6 @@
 // fetchCandles.js
 
-import { getCached, setCached } from './cache.js';
+import { loadCache as getCached, saveCache as setCached } from './cache.js';
 
 const BINANCE_API = 'https://api.binance.com/api/v3/klines';
 
