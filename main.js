@@ -10,18 +10,17 @@ window.addEventListener('message', (event) => {
   }
 });
 
-const emailFromGhost = localStorage.getItem('gtm_user_email');
-
-// Delay the login check to allow postMessage time to arrive
 setTimeout(() => {
-  if (!emailFromGhost) {
+  const email = localStorage.getItem('gtm_user_email');
+  if (!email) {
     document.body.innerHTML = `
       <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
         Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
       </h2>`;
     throw new Error('Not logged in');
   }
-}, 1500); // wait 1.5 seconds
+}, 1500);
+
 
 
 
