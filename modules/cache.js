@@ -3,7 +3,7 @@
 const CACHE_KEY = 'gtm_cache';
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-export function getCached() {
+export function loadCache() {
   try {
     const s = localStorage.getItem(CACHE_KEY);
     if (!s) return {};
@@ -18,7 +18,7 @@ export function getCached() {
   }
 }
 
-export function setCached(data) {
+export function saveCache(data) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
   } catch {}
