@@ -9,42 +9,32 @@ import { cryptoSymbols, forexSymbols, stockSymbols } from './modules/symbols.js'
 import { generateAISummary } from './modules/ai.js';
 import './modules/rateLimit.js';
 
-// ✅ Auth handshake with Ghost via postMessage
+// ✅ Wordpress handshake
 let loggedInUserEmail = null;
-const allowedOrigins = ['https://tiankriek.com'];
 
-// ✅ Wait for login email via postMessage from Ghost
-window.addEventListener('message', (event) => {
-  console.log('📩 Received postMessage:', event);
-
-  if (allowedOrigins.includes(event.origin) && event.data.email) {
-    console.log('✅ Accepted login from:', event.origin);
-    localStorage.setItem('gtm_user_email', event.data.email);
-    loggedInUserEmail = event.data.email;
-    initDashboard(); // Start dashboard
-  } else {
-    console.warn('❌ Message rejected. Origin:', event.origin, 'Data:', event.data);
-  }
-});
-
-
-// ✅ Fallback: check localStorage if user refreshed
-const storedEmail = localStorage.getItem('gtm_user_email');
-if (storedEmail) {
-  loggedInUserEmail = storedEmail;
-  initDashboard();
-} else {
-  // Wait max 5s for postMessage before blocking access
-  setTimeout(() => {
-    if (!loggedInUserEmail) {
-      document.body.innerHTML = `
-        <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
-          Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
-        </h2>`;
-      throw new Error('Not logged in');
+// ✅ Step 1: Call WP AJAX to get logged-in user email
+fetch('https://tiankriek.com/wp-admin/admin-ajax.php?action=get_user_email')
+  .then(res => res.json())
+  .then(data => {
+    if (data.email) {
+      localStorage.setItem('gtm_user_email', data.email);
+      loggedInUserEmail = data.email;
+      initDashboard(); // ✅ start dashboard once we have the user
+    } else {
+      showAccessDenied();
     }
-  }, 5000);
+  })
+  .catch(() => showAccessDenied());
+
+function showAccessDenied() {
+  document.body.innerHTML = `
+    <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
+      Access denied. Please <a href="https://tiankriek.com" target="_blank">log in</a>
+    </h2>`;
+  throw new Error('Not logged in');
 }
+
+ 
 
 // ✅ Main Dashboard Logic
 async function initDashboard() {
