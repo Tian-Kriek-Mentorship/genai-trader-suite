@@ -1,13 +1,26 @@
 // main.js
 
 // ✅ Block access if not logged in via Ghost
-if (!window.loggedInUserEmail) {
+const allowedOrigins = ['https://tiankriek.com'];
+let emailFromGhost = localStorage.getItem('gtm_user_email');
+
+window.addEventListener('message', (event) => {
+  if (allowedOrigins.includes(event.origin) && event.data.email) {
+    localStorage.setItem('gtm_user_email', event.data.email);
+    location.reload(); // Refresh to activate login
+  }
+});
+
+if (!emailFromGhost) {
   document.body.innerHTML = `
     <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
       Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
     </h2>`;
   throw new Error('Not logged in');
 }
+
+window.loggedInUserEmail = emailFromGhost;
+
 
 // ✅ Modular Imports
 import { loadCache, saveCache } from './modules/cache.js';
