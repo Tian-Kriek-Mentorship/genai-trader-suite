@@ -25,3 +25,7 @@ export async function loadPortfolio(email) {
     }
   });
 }
+
+export function userEmail() {
+  return localStorage.getItem('gtm_user_email') || '';
+}
