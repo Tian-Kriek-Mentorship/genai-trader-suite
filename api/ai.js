@@ -1,35 +1,42 @@
 // api/ai.js
-import OpenAI from "openai";
+import { OpenAI } from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY // Ensure this is set in your server environment
+});
 
 export default async function handler(req, res) {
-  // 🔥 DEBUGGING: make sure our key is set
-  console.log("🔑 OPENAI_API_KEY present?", !!process.env.OPENAI_API_KEY);
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-  const { prompt } = req.body;
-  if (!prompt) {
-    return res.status(400).json({ error: "No prompt provided" });
-  }
-
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-
   try {
-    const chat = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",           // ← you can switch to this for testing
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const { symbol, prompt } = req.body;
+
+    if (!symbol || !prompt) {
+      return res.status(400).json({ error: 'Missing symbol or prompt' });
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
       messages: [
-        { role: "system", content: "You’re a concise market‑analysis assistant." },
-        { role: "user",   content: prompt },
+        {
+          role: 'system',
+          content: 'You are a market analyst. Write an expert trading summary for the given symbol.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
       ],
       temperature: 0.7,
+      max_tokens: 500
     });
-    const summary = chat.choices[0].message.content;
-    res.status(200).json({ summary });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
+
+    const summary = completion.choices[0]?.message?.content?.trim();
+    res.status(200).json({ symbol, summary });
+  } catch (err) {
+    console.error('AI Summary Error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 }
