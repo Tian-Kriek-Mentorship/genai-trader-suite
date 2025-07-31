@@ -5,26 +5,33 @@ import { runScanner } from './modules/scanner.js';
 import { wireUpInvestInputs } from './modules/portfolioInputs.js';
 import { getProjectedAnnualReturn } from './modules/projectedReturns.js';
 import { loadInterestRates } from './modules/interestRates.js';
-import { cryptoSymbols, forexSymbols, stockSymbols } from './modules/symbols.js';
 import { generateAISummary } from './modules/ai.js';
 import './modules/rateLimit.js';
 
-// ✅ WordPress Auth Handshake (via postMessage)
+// ✅ WordPress handshake
 let loggedInUserEmail = null;
 
-window.addEventListener('message', (event) => {
-  const allowedOrigin = 'https://tiankriek.com';
-  if (event.origin !== allowedOrigin) return;
-
-  const email = event.data?.email;
-  if (email) {
-    localStorage.setItem('gtm_user_email', email);
-    loggedInUserEmail = email;
-    initDashboard(); // ✅ start dashboard once we have the user
-  } else {
-    showAccessDenied();
-  }
-});
+// ✅ Step 1: Call WP AJAX to get logged-in user email
+fetch('https://tiankriek.com/wp-admin/admin-ajax.php?action=get_user_email')
+  .then(res => res.json())
+  .then(data => {
+    if (data.email) {
+      localStorage.setItem('gtm_user_email', data.email);
+      loggedInUserEmail = data.email;
+      return import('/modules/symbols.js'); // ✅ dynamic import
+    } else {
+      showAccessDenied();
+    }
+  })
+  .then(mod => {
+    if (mod) {
+      window.cryptoSymbols = mod.cryptoSymbols;
+      window.forexSymbols = mod.forexSymbols;
+      window.stockSymbols = mod.stockSymbols;
+      initDashboard(); // ✅ start dashboard once we have everything
+    }
+  })
+  .catch(() => showAccessDenied());
 
 function showAccessDenied() {
   document.body.innerHTML = `
