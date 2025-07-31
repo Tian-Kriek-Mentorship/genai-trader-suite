@@ -9,7 +9,36 @@ import { generateAISummary } from './modules/ai.js';
 import './modules/rateLimit.js';
 
 // ✅ WordPress handshake
+// ✅ WordPress iframe postMessage listener
 let loggedInUserEmail = null;
+
+window.addEventListener('message', (event) => {
+  if (event.origin !== 'https://tiankriek.com') return; // ✅ tighten security
+
+  const email = event.data?.email;
+  if (email) {
+    localStorage.setItem('gtm_user_email', email);
+    loggedInUserEmail = email;
+
+    // ✅ Load symbols dynamically and start dashboard
+    import('/modules/symbols.js').then(mod => {
+      window.cryptoSymbols = mod.cryptoSymbols;
+      window.forexSymbols = mod.forexSymbols;
+      window.stockSymbols = mod.stockSymbols;
+      initDashboard();
+    }).catch(() => showAccessDenied());
+  } else {
+    showAccessDenied();
+  }
+}, false);
+
+// ✅ fallback protection: only showAccessDenied if dashboard never initializes after a delay
+setTimeout(() => {
+  if (!loggedInUserEmail) showAccessDenied();
+}, 3000);
+
+
+
 
 // ✅ Step 1: Call WP AJAX to get logged-in user email
 fetch('https://tiankriek.com/wp-admin/admin-ajax.php?action=get_user_email', {
