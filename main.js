@@ -23,7 +23,7 @@ setTimeout(() => {
   }
 }, 1500); // wait 1.5 seconds
 
-}
+
 
 window.loggedInUserEmail = emailFromGhost;
 
