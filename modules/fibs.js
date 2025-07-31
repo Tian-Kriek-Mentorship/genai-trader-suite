@@ -1,3 +1,14 @@
+// fibs.js
+
+/**
+ * Draws a Fib extension line from swing low/high to fractal, then determines
+ * whether to project the 0.618, 1.618, or 2.618 target based on price behavior.
+ *
+ * @param {Object} chart - LightweightCharts chart
+ * @param {Array} candles - Array of OHLC candles
+ * @param {boolean} isUptrend - true for bullish structure, false for bearish
+ * @returns {number|null} - The projected Fibonacci target level
+ */
 export function drawFibsOnChart(chart, candles, isUptrend = true) {
   const findSwing = (data, start, end, up) => {
     let idx = start;
@@ -56,7 +67,6 @@ export function drawFibsOnChart(chart, candles, isUptrend = true) {
 
   let target = computeTarget(candles, pIdx, qIdx, isUptrend);
 
-  // Draw line
   const line = chart.addLineSeries({ color: 'darkgreen', lineWidth: 2 });
   line.setData([
     { time: candles[0].time, value: target },
