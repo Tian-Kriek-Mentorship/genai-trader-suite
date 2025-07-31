@@ -11,7 +11,7 @@ if (!window.loggedInUserEmail) {
 
 // ✅ Modular Imports
 import { loadCache, saveCache } from './modules/cache.js';
-import { loadPortfolio, savePortfolio, userEmail } from './modules/api.js';
+import { loadPortfolio, savePortfolio, userEmail } from './modules/portfolio.js';
 import { runScanner } from './modules/scanner.js';
 import { wireUpInvestInputs } from './modules/portfolioInputs.js';
 import { getProjectedAnnualReturn } from './modules/projectedReturns.js';
