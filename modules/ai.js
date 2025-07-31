@@ -1,53 +1,54 @@
 // ai.js
 
-const aiEndpoint = '/api/ai';
+export async function generateAISummary(symbol, {
+  emaTrend,
+  signal,
+  dailyFibTarget,
+  hourlyFibTarget,
+  cagr
+}) {
+  const prompt = buildAIPrompt({
+    symbol,
+    emaTrend,
+    signal,
+    dailyFibTarget,
+    hourlyFibTarget,
+    cagr
+  });
 
-/**
- * Calls your serverless OpenAI backend and injects AI summary into the page.
- */
-export async function generateAISummary() {
-  const input = document.getElementById('symbolInput');
-  const symbol = input?.value || '';
-  if (!symbol) return;
+  const res = await fetch('/api/ai.js', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol, prompt })
+  });
 
-  const output = document.getElementById('aiSummary');
-  if (output) {
-    output.innerHTML = `<div style="margin-top:1em;font-style:italic">⏳ Generating summary for <b>${symbol}</b>...</div>`;
-  }
+  const json = await res.json();
+  return json.summary || '';
+}
 
-  const prompt = `
-You are a professional trading assistant providing a structured, concise market summary for ${symbol}.
-Your response should be a numbered list covering the following points:
+function buildAIPrompt({
+  symbol,
+  emaTrend = 'unknown',
+  signal = 'no signal',
+  dailyFibTarget = 0,
+  hourlyFibTarget = 0,
+  cagr = 0
+}) {
+  return `
+1. ${symbol} is currently in a ${emaTrend} state with recent price movements and investor sentiment driving market conditions.
 
-1. The overall trend and sentiment.
-2. Signal from the 45 EMA (bullish, bearish, or neutral).
-3. Any TradingView-style signal (buy, sell, or wait).
-4. Long-term Fibonacci target (daily timeframe).
-5. Short-term Fibonacci target (hourly timeframe).
-6. Key upcoming events or macroeconomic factors to watch.
-7. Projected annual return as a percentage.
-8. A brief explanation of what ${symbol} is and how it trades.
+2. The probability based on the 45‑EMA suggests a ${emaTrend} trend for ${symbol}.
 
-Use short paragraphs and write in plain English.
-`;
+3. The current signal for ${symbol} is: ${signal}.
 
-  try {
-    const res = await fetch(aiEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol, prompt })
-    });
+4. The longer‑term Fibonacci target for ${symbol} on a daily timeframe is ${dailyFibTarget?.toFixed(2)}.
 
-    const json = await res.json();
-    const summary = json?.summary || '⚠️ No summary returned.';
+5. The short‑term Fibonacci target for ${symbol} on an hourly timeframe is ${hourlyFibTarget?.toFixed(2)}.
 
-    if (output) {
-      output.innerHTML = `<div style="margin-top:1em"><b>🧠 AI Summary for ${symbol}</b><br/><br/>${summary}</div>`;
-    }
-  } catch (e) {
-    console.error('AI Summary Error:', e);
-    if (output) {
-      output.innerHTML = `<div style="margin-top:1em;color:red">⚠️ Failed to generate AI summary. Please try again later.</div>`;
-    }
-  }
+6. Major upcoming announcements or events, such as regulatory developments, institutional investments, or macroeconomic indicators, could impact ${symbol}'s price.
+
+7. The projected annual return for ${symbol} is estimated at ${(cagr * 100).toFixed(2)}%.
+
+8. ${symbol} is a trading pair that represents the exchange rate between a base and quote asset. Please describe its importance for trading strategies and market sentiment.
+`.trim();
 }
