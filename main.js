@@ -13,15 +13,14 @@ let loggedInUserEmail = null;
 
 // ✅ Step 1: Call WP AJAX to get logged-in user email
 fetch('https://tiankriek.com/wp-admin/admin-ajax.php?action=get_user_email', {
-  credentials: 'include'
+  credentials: 'include' // ✅ important for session cookies
 })
-
   .then(res => res.json())
   .then(data => {
     if (data.email) {
       localStorage.setItem('gtm_user_email', data.email);
       loggedInUserEmail = data.email;
-      return import('/modules/symbols.js'); // ✅ dynamic import
+      return import('./modules/symbols.js'); // ✅ dynamic import (relative path!)
     } else {
       showAccessDenied();
     }
@@ -49,7 +48,6 @@ async function initDashboard() {
   window.loggedInUserEmail = loggedInUserEmail;
 
   document.addEventListener('DOMContentLoaded', async () => {
-    // ✅ DOM Elements
     const symbolInput = document.getElementById('symbolInput');
     const datalistEl = document.getElementById('symbolDatalist');
     const aiBtn = document.getElementById('aiBtn');
@@ -61,7 +59,7 @@ async function initDashboard() {
       return;
     }
 
-    const symbols = [...cryptoSymbols, ...forexSymbols, ...stockSymbols];
+    const symbols = [...window.cryptoSymbols, ...window.forexSymbols, ...window.stockSymbols];
 
     function buildScannerHeader() {
       const header = scannerTable.querySelector('thead tr');
@@ -101,7 +99,7 @@ async function initDashboard() {
 
     buildScannerHeader();
 
-    symbolInput.value = cryptoSymbols[0];
+    symbolInput.value = window.cryptoSymbols[0];
     symbolInput.addEventListener('input', () => {
       if (symbols.includes(symbolInput.value)) updateDashboard();
     });
