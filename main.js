@@ -23,6 +23,33 @@ function saveCache(data) {
   } catch {}
 }
 
+// ――― API Helpers for Portfolio Save/Load ―――
+async function savePortfolio(email, symbol, amount_invested, portfolio_weight) {
+  await fetch('https://tiankriekmentorship.com/api/savePortfolio.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, symbol, amount_invested, portfolio_weight })
+  });
+}
+
+async function loadPortfolio(email) {
+  const res = await fetch(`https://tiankriekmentorship.com/api/loadPortfolio.php?email=${email}`);
+  const json = await res.json();
+  if (json.status !== 'success') return;
+
+  json.portfolios.forEach(p => {
+    const tr = Array.from(document.querySelectorAll('#scannerTable tbody tr'))
+      .find(row => row.querySelector('td:first-child')?.textContent === p.symbol);
+    if (tr) {
+      const amtInput = tr.querySelectorAll('.amount-invested')[0];
+      const weightInput = tr.querySelectorAll('.amount-invested')[1];
+      amtInput.value = p.amount_invested;
+      weightInput.value = p.portfolio_weight;
+      amtInput.dispatchEvent(new Event('input'));
+    }
+  });
+}
+
 // ――― 0.5) Rate‑limit detection & banner ―――
 let rateLimited = false;
 axios.interceptors.response.use(
@@ -633,11 +660,10 @@ async function updateDashboard(){
   await runScanner();
 }
 
-// ――― 13) init ―――
+
 (async function init(){
   await loadInterestRates();
 
-  // build your hidden off‑screen divs…
   ['scannerTempDaily','scannerTempHourly'].forEach(id => {
     if (!document.getElementById(id)) {
       const d = document.createElement('div');
@@ -646,17 +672,14 @@ async function updateDashboard(){
     }
   });
 
-  // populate your symbol datalist…
   symbols.forEach(s => {
     const o = document.createElement('option');
     o.value = s;
     datalistEl.appendChild(o);
   });
 
-  // **here** build the scanner header (9 fixed + 12 dynamic)
   buildScannerHeader();
 
-  // initial symbol, hooks, first render…
   symbolInput.value = cryptoSymbols[0];
   symbolInput.addEventListener('input', () => {
     if (symbols.includes(symbolInput.value)) updateDashboard();
@@ -664,6 +687,9 @@ async function updateDashboard(){
   aiBtn.addEventListener('click', generateAISummary);
   scannerFilter.addEventListener('input', runScanner);
 
-  updateDashboard();
-})();
+  await updateDashboard();
 
+  if (window.loggedInUserEmail) {
+    await loadPortfolio(window.loggedInUserEmail);
+  }
+})();
