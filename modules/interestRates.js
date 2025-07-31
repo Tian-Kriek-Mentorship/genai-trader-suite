@@ -42,7 +42,7 @@ export async function loadInterestRates() {
   }
 
   try {
-    const res = await fetch('https://api.twelvedata.com/interest_rate?apikey=YOUR_TWELVE_DATA_KEY');
+    const res = await fetch('https://api.twelvedata.com/interest_rate?apikey=1eed79e08f4a4d6092a9b4e634c3bbf8');
     const json = await res.json();
     const data = json?.data || [];
     saveCachedRates(data);
