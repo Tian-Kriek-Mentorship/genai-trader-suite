@@ -9,22 +9,22 @@ import { cryptoSymbols, forexSymbols, stockSymbols } from './modules/symbols.js'
 import { generateAISummary } from './modules/ai.js';
 import './modules/rateLimit.js';
 
-// ✅ Wordpress handshake
+// ✅ WordPress Auth Handshake (via postMessage)
 let loggedInUserEmail = null;
 
-// ✅ Step 1: Call WP AJAX to get logged-in user email
-fetch('https://tiankriek.com/wp-admin/admin-ajax.php?action=get_user_email')
-  .then(res => res.json())
-  .then(data => {
-    if (data.email) {
-      localStorage.setItem('gtm_user_email', data.email);
-      loggedInUserEmail = data.email;
-      initDashboard(); // ✅ start dashboard once we have the user
-    } else {
-      showAccessDenied();
-    }
-  })
-  .catch(() => showAccessDenied());
+window.addEventListener('message', (event) => {
+  const allowedOrigin = 'https://tiankriek.com';
+  if (event.origin !== allowedOrigin) return;
+
+  const email = event.data?.email;
+  if (email) {
+    localStorage.setItem('gtm_user_email', email);
+    loggedInUserEmail = email;
+    initDashboard(); // ✅ start dashboard once we have the user
+  } else {
+    showAccessDenied();
+  }
+});
 
 function showAccessDenied() {
   document.body.innerHTML = `
@@ -33,8 +33,6 @@ function showAccessDenied() {
     </h2>`;
   throw new Error('Not logged in');
 }
-
- 
 
 // ✅ Main Dashboard Logic
 async function initDashboard() {
