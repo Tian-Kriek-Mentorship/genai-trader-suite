@@ -15,12 +15,18 @@ const allowedOrigins = ['https://tiankriek.com'];
 
 // ✅ Wait for login email via postMessage from Ghost
 window.addEventListener('message', (event) => {
+  console.log('📩 Received postMessage:', event);
+
   if (allowedOrigins.includes(event.origin) && event.data.email) {
+    console.log('✅ Accepted login from:', event.origin);
     localStorage.setItem('gtm_user_email', event.data.email);
     loggedInUserEmail = event.data.email;
-    initDashboard(); // 👉 Start dashboard only after receiving email
+    initDashboard(); // Start dashboard
+  } else {
+    console.warn('❌ Message rejected. Origin:', event.origin, 'Data:', event.data);
   }
 });
+
 
 // ✅ Fallback: check localStorage if user refreshed
 const storedEmail = localStorage.getItem('gtm_user_email');
