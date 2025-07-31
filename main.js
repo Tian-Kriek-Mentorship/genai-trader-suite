@@ -1,28 +1,14 @@
 // main.js
 
-// ✅ Delay Access Check to Allow Ghost to Inject Email via postMessage
 const allowedOrigins = ['https://tiankriek.com'];
 
+// ⏳ Wait for Ghost email via postMessage
 window.addEventListener('message', (event) => {
   if (allowedOrigins.includes(event.origin) && event.data.email) {
     localStorage.setItem('gtm_user_email', event.data.email);
-    location.reload(); // Refresh with email stored
+    location.reload();
   }
 });
-
-// ✅ Postpone access check so postMessage can arrive
-setTimeout(() => {
-  const email = localStorage.getItem('gtm_user_email');
-  if (!email) {
-    document.body.innerHTML = `
-      <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
-        Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
-      </h2>`;
-    throw new Error('Not logged in');
-  } else {
-    window.loggedInUserEmail = email;
-  }
-}, 1000);
 
 // ✅ Modular Imports
 import { loadCache, saveCache } from './modules/cache.js';
@@ -33,37 +19,55 @@ import { getProjectedAnnualReturn } from './modules/projectedReturns.js';
 import { loadInterestRates } from './modules/interestRates.js';
 import { cryptoSymbols, forexSymbols, stockSymbols } from './modules/symbols.js';
 import { generateAISummary } from './modules/ai.js';
-import './modules/rateLimit.js'; // applies axios interceptor globally
+import './modules/rateLimit.js';
 
-// ✅ DOM Elements
-const symbolInput = document.getElementById('symbolInput');
-const datalistEl = document.getElementById('symbolDatalist');
-const aiBtn = document.getElementById('aiBtn');
-const scannerFilter = document.getElementById('scannerFilter');
+document.addEventListener('DOMContentLoaded', async () => {
+  const email = localStorage.getItem('gtm_user_email');
+  if (!email) {
+    document.body.innerHTML = `
+      <h2 style="text-align:center;margin-top:50px;font-family:sans-serif">
+        Access denied. Please log in via <a href="https://tiankriek.com" target="_blank">tiankriek.com</a>
+      </h2>`;
+    throw new Error('Not logged in');
+  }
 
-// ✅ Combined symbols
-const symbols = [...cryptoSymbols, ...forexSymbols, ...stockSymbols];
+  window.loggedInUserEmail = email;
 
-// ✅ Scanner table column headers
-function buildScannerHeader() {
-  const header = document.querySelector('#scannerTable thead tr');
-  header.innerHTML = `
-    <th>Symbol</th>
-    <th>EMA Signal</th>
-    <th>RSI Signal</th>
-    <th>Target</th>
-    <th>$ Invested</th>
-    <th>% Weight</th>
-    ${Array.from({ length: 12 }).map((_, i) => `<th class="month-${i + 1}">${new Date(0, i).toLocaleString('en', { month: 'short' })}</th>`).join('')}
-    <th>5 Yr</th>
-  `;
-}
+  // ✅ DOM Elements
+  const symbolInput = document.getElementById('symbolInput');
+  const datalistEl = document.getElementById('symbolDatalist');
+  const aiBtn = document.getElementById('aiBtn');
+  const scannerFilter = document.getElementById('scannerFilter');
+  const scannerTable = document.getElementById('scannerTable');
 
-// ✅ Main Initialization
-(async function init() {
-  await loadInterestRates();
+  if (!symbolInput || !datalistEl || !scannerFilter || !scannerTable) {
+    console.error('❌ Required DOM elements not found.');
+    return;
+  }
 
-  // Dummy chart containers for internal analysis
+  const symbols = [...cryptoSymbols, ...forexSymbols, ...stockSymbols];
+
+  function buildScannerHeader() {
+    const header = scannerTable.querySelector('thead tr');
+    if (!header) return;
+    header.innerHTML = `
+      <th>Symbol</th>
+      <th>EMA Signal</th>
+      <th>RSI Signal</th>
+      <th>Target</th>
+      <th>$ Invested</th>
+      <th>% Weight</th>
+      ${Array.from({ length: 12 }).map((_, i) => `<th class="month-${i + 1}">${new Date(0, i).toLocaleString('en', { month: 'short' })}</th>`).join('')}
+      <th>5 Yr</th>
+    `;
+  }
+
+  try {
+    await loadInterestRates(); // You can disable this temporarily if API fails
+  } catch (e) {
+    console.warn('⚠️ Skipping interest rate fetch due to error:', e.message);
+  }
+
   ['scannerTempDaily', 'scannerTempHourly'].forEach(id => {
     if (!document.getElementById(id)) {
       const d = document.createElement('div');
@@ -73,7 +77,6 @@ function buildScannerHeader() {
     }
   });
 
-  // Populate symbol dropdown
   symbols.forEach(s => {
     const o = document.createElement('option');
     o.value = s;
@@ -82,7 +85,6 @@ function buildScannerHeader() {
 
   buildScannerHeader();
 
-  // Default selection
   symbolInput.value = cryptoSymbols[0];
   symbolInput.addEventListener('input', () => {
     if (symbols.includes(symbolInput.value)) updateDashboard();
@@ -93,16 +95,15 @@ function buildScannerHeader() {
 
   await updateDashboard();
 
-  const email = userEmail();
-  if (email) {
-    await loadPortfolio(email);
+  const activeEmail = userEmail();
+  if (activeEmail) {
+    await loadPortfolio(activeEmail);
   }
-})();
 
-// ✅ Update Dashboard based on selected symbol
-async function updateDashboard() {
-  const sym = symbolInput.value;
-  const cagr = await getProjectedAnnualReturn(sym);
-  document.getElementById('scannerFilter').value = sym;
-  await runScanner();
-}
+  async function updateDashboard() {
+    const sym = symbolInput.value;
+    const cagr = await getProjectedAnnualReturn(sym);
+    document.getElementById('scannerFilter').value = sym;
+    await runScanner();
+  }
+});
