@@ -8,61 +8,32 @@ import { loadInterestRates } from './modules/interestRates.js';
 import { generateAISummary } from './modules/ai.js';
 import './modules/rateLimit.js';
 
-// ✅ WordPress handshake
 // ✅ WordPress iframe postMessage listener
 let loggedInUserEmail = null;
 
 window.addEventListener('message', (event) => {
-  if (event.origin !== 'https://tiankriek.com') return; // ✅ tighten security
+  if (event.origin !== 'https://tiankriek.com') return; // 🔒 tighten origin check
 
   const email = event.data?.email;
   if (email) {
     localStorage.setItem('gtm_user_email', email);
     loggedInUserEmail = email;
 
-    // ✅ Load symbols dynamically and start dashboard
-    import('/modules/symbols.js').then(mod => {
+    import('./modules/symbols.js').then(mod => {
       window.cryptoSymbols = mod.cryptoSymbols;
       window.forexSymbols = mod.forexSymbols;
       window.stockSymbols = mod.stockSymbols;
-      initDashboard();
+      initDashboard(); // ✅ start dashboard after symbols are loaded
     }).catch(() => showAccessDenied());
   } else {
     showAccessDenied();
   }
 }, false);
 
-// ✅ fallback protection: only showAccessDenied if dashboard never initializes after a delay
+// ✅ Fallback: show error if iframe never receives email
 setTimeout(() => {
   if (!loggedInUserEmail) showAccessDenied();
 }, 3000);
-
-
-
-
-// ✅ Step 1: Call WP AJAX to get logged-in user email
-fetch('https://tiankriek.com/wp-admin/admin-ajax.php?action=get_user_email', {
-  credentials: 'include' // ✅ important for session cookies
-})
-  .then(res => res.json())
-  .then(data => {
-    if (data.email) {
-      localStorage.setItem('gtm_user_email', data.email);
-      loggedInUserEmail = data.email;
-      return import('./modules/symbols.js'); // ✅ dynamic import (relative path!)
-    } else {
-      showAccessDenied();
-    }
-  })
-  .then(mod => {
-    if (mod) {
-      window.cryptoSymbols = mod.cryptoSymbols;
-      window.forexSymbols = mod.forexSymbols;
-      window.stockSymbols = mod.stockSymbols;
-      initDashboard(); // ✅ start dashboard once we have everything
-    }
-  })
-  .catch(() => showAccessDenied());
 
 function showAccessDenied() {
   document.body.innerHTML = `
